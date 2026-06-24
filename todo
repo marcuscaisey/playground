@@ -1,0 +1,8 @@
+* Anonymous session with built in template
+* Named session
+* Respect $EDITOR
+* Custom template
+* README
+    * Motiviation
+    * Demo
+    * Mention https://labix.org/hsandbox as inspiration
