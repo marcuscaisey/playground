@@ -1,0 +1,12 @@
+* Run like "pg python" or "pg python pydantic"
+    * "pg python" opens an anonymous session stored at "~/.pg/sessions/$timestamp"
+    * "pg python pydantic" opens a named session called "pydantic" stored at "~/.pg/sessions/pydantic"
+* Python file opened in editor populated with template for python script
+    * Editor is taken from $EDITOR
+    * ~/.pg/templates/python is searched for template
+    * Fallback to using built-in template
+* Current tmux pane split horizontally in two
+    * Top pane is for editor
+    * Bottom pane is for results
+* When editor is saved, code is executed and output is displayed in results pane
+* When editor is closed, results pane is closed
