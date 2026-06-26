@@ -2,7 +2,9 @@
 * Named session
 * Respect $EDITOR
 * Custom template
-* Error handling from script
+* Error handling from run.sh
+* Start new tmux session if not already in one
+* Context / signal handling
 * README
     * Motiviation
     * Demo
