@@ -2,6 +2,7 @@
 * Named session
 * Respect $EDITOR
 * Custom template
+* Error handling from script
 * README
     * Motiviation
     * Demo
