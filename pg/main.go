@@ -5,9 +5,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -16,24 +18,20 @@ func main() {
 	os.Exit(cli())
 }
 
-// cliError describes an incorrect usage of the CLI.
+// cliError records an incorrect usage of the CLI.
 type cliError string
 
 func (e cliError) Error() string {
 	return string(e)
 }
 
-// newCliErrorf creates a [cliError].
-// The error message is constructed from the given format string and arguments, as in [fmt.Sprintf].
 func newCliErrorf(format string, a ...any) cliError {
 	return cliError(fmt.Sprintf(format, a...))
 }
 
-// cli parses the CLI args, runs pg, and returns the appropriate exit code:
-//   - If the -help flag is passed, then the usage is printed and 0 is returned.
-//   - If the CLI is used incorrectly (e.g. invalid flag, not enough args), then the error and usage
-//     are printed and 2 is returned.
-//   - If any other error occurs, then the error is printed and 1 is returned.
+// cli parses the CLI args, runs pg, reports any errors, and returns the process exit code.
+//
+// It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
 func cli() int {
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name>")
@@ -51,7 +49,7 @@ func cli() int {
 	}
 
 	if err := pg(flag.Args()); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		if _, ok := errors.AsType[cliError](err); ok {
 			flag.Usage()
 			return 2
@@ -62,6 +60,7 @@ func cli() int {
 	return 0
 }
 
+// TODO: fill in
 func pg(args []string) error {
 	if len(args) < 1 {
 		return newCliErrorf("template name not provided")
@@ -71,13 +70,36 @@ func pg(args []string) error {
 	}
 
 	// 1. Load template
-	// 2. Split pane
-	// 3. Start nvim in top pane
-	// 4. Start pg in runner mode in bottom pane
+	// 2. Create session directory
+	// 3. CD to session directory
+	// 4. Split pane
+	// 5. Start nvim in top pane
+	// 6. Start pg in runner mode in bottom pane
 
 	templateName := args[0]
-	_, err := loadTemplate(templateName)
+	template, err := loadTemplate(templateName)
 	if err != nil {
+		if errors.Is(err, errTemplateNotFound) {
+			return fmt.Errorf("template %q not found", templateName)
+		}
+		if templateInvalidErr, ok := errors.AsType[*templateInvalidError](err); ok {
+			templateSrc := fmt.Sprintf("built-in template %q", templateInvalidErr.Name)
+			if templateInvalidErr.Path != "" {
+				templateSrc = fmt.Sprintf("template %q (%q)", templateInvalidErr.Name, templateInvalidErr.Path)
+			}
+			return fmt.Errorf("%s is invalid: %s", templateSrc, templateInvalidErr.Reason)
+		}
+		return err
+	}
+
+	sessionDir, err := anonSessionDir(template.Name)
+	if err != nil {
+		return err
+	}
+	if err := setupSessionDir(sessionDir, template.FS); err != nil {
+		return err
+	}
+	if err := os.Chdir(sessionDir); err != nil {
 		return err
 	}
 
@@ -91,7 +113,7 @@ func pg(args []string) error {
 		}
 	}()
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	return nil
 }
@@ -99,54 +121,94 @@ func pg(args []string) error {
 //go:embed templates/*
 var builtinTemplates embed.FS
 
+// template represents a playground template.
+//
+// A playground template is a directory containing the files used to run a playground session. The
+// contents of the template are copied into the session directory.
+//
+// A template contains:
+//   - Exactly one "main.*" file, the entrypoint opened when the session starts
+//   - A "run.sh" file, the run script executed as "bash run.sh $entrypoint"
+//   - Any other files needed to run the session
 type template struct {
-	EntrypointContents []byte
-	RunScriptContents  []byte
+	Name       string // Template name; matches the template directory name.
+	FS         fs.FS  // File system containing the template's files.
+	Entrypoint string // Entrypoint filename, such as "main.go".
+}
+
+var errTemplateNotFound = errors.New("not found")
+
+// templateInvalidError records an invalid template and the reason it's invalid.
+//
+// Path is empty for built-in templates.
+type templateInvalidError struct {
+	Name   string
+	Path   string
+	Reason string
+}
+
+func (e *templateInvalidError) Error() string {
+	return e.Reason
+}
+
+func newTemplateInvalidErrorf(name string, path string, reason string, a ...any) *templateInvalidError {
+	return &templateInvalidError{
+		Name:   name,
+		Path:   path,
+		Reason: fmt.Sprintf(reason, a...),
+	}
 }
 
 // loadTemplate loads a template from the set of built-in templates.
+// If the template does not exist, the returned error wraps [errTemplateNotFound].
+// If the loaded template is invalid, the returned error wraps [*templateInvalidError].
 func loadTemplate(name string) (template, error) {
-	templateDir := filepath.Join("templates", name)
-	templateDirContents, err := builtinTemplates.ReadDir(templateDir)
+	templateFS, err := fs.Sub(builtinTemplates, filepath.Join("templates", name))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return template{}, fmt.Errorf("loading template %q: does not exist", name)
-		}
 		return template{}, fmt.Errorf("loading template %q: %s", name, err)
+	}
+	// [fs.Sub] doesn't check whether the dir exists, so we need to explicity check.
+	if _, err := fs.Stat(templateFS, "."); err != nil {
+		if os.IsNotExist(err) {
+			return template{}, fmt.Errorf("loading template %q: %w", name, errTemplateNotFound)
+		}
+		return template{}, err
 	}
 
-	var entrypointName string
-	for _, dirEntry := range templateDirContents {
-		if dirEntry.IsDir() {
-			continue
-		}
-		filename := strings.TrimSuffix(dirEntry.Name(), filepath.Ext(dirEntry.Name()))
-		if filename == "main" {
-			if entrypointName != "" {
-				return template{}, fmt.Errorf("loading template %q: multiple entrypoints defined: %q and %q", name, entrypointName, dirEntry.Name())
-			}
-			entrypointName = dirEntry.Name()
-		}
-	}
-	if entrypointName == "" {
-		return template{}, fmt.Errorf(`loading template %q: entrypoint ("main.*") is missing`, name)
-	}
-	entrypointContents, err := builtinTemplates.ReadFile(filepath.Join(templateDir, entrypointName))
+	const entrypointPattern = "main.*"
+	entrypoints, err := fs.Glob(templateFS, entrypointPattern)
 	if err != nil {
-		return template{}, fmt.Errorf("loading template %q: %s", name, err)
+		return template{}, fmt.Errorf("loading template %q: identifying entrypoint: %s", name, err)
+	}
+	var entrypoint string
+	switch len(entrypoints) {
+	case 1:
+		entrypoint = entrypoints[0]
+	case 0:
+		templateInvalidErr := newTemplateInvalidErrorf(name, "", "entrypoint (%q file) is missing", entrypointPattern)
+		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
+	default:
+		quotedEntrypoints := make([]string, len(entrypoints))
+		for i, entrypoint := range entrypoints {
+			quotedEntrypoints[i] = strconv.Quote(entrypoint)
+		}
+		templateInvalidErr := newTemplateInvalidErrorf(name, "", "multiple entrypoints: %s", strings.Join(quotedEntrypoints, ", "))
+		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
 	}
 
-	runScriptContents, err := builtinTemplates.ReadFile(filepath.Join(templateDir, "run.sh"))
-	if err != nil {
+	const runScriptFilename = "run.sh"
+	if _, err := fs.Stat(templateFS, runScriptFilename); err != nil {
 		if os.IsNotExist(err) {
-			return template{}, fmt.Errorf(`loading template %q: run script ("run.sh") is missing`, name)
+			templateInvalidErr := newTemplateInvalidErrorf(name, "", "run script (%q file) is missing", runScriptFilename)
+			return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
 		}
-		return template{}, fmt.Errorf("loading template %q: %s", name, err)
+		return template{}, err
 	}
 
 	return template{
-		EntrypointContents: entrypointContents,
-		RunScriptContents:  runScriptContents,
+		Name:       name,
+		FS:         templateFS,
+		Entrypoint: entrypoint,
 	}, nil
 }
 
@@ -182,4 +244,25 @@ func cmdErrMsg(err error) string {
 		return string(exitErr.Stderr)
 	}
 	return err.Error()
+}
+
+func anonSessionDir(templateName string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("generating anonymous session directory name: %s", err)
+	}
+	sessionName := fmt.Sprintf("%s-%s", templateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
+	return filepath.Join(homeDir, ".pg", "sessions", "anonymous", sessionName), nil
+}
+
+// setupSessionDir sets up the directory for a session by creating it and copying the template files
+// to the directory.
+func setupSessionDir(dir string, fs fs.FS) error {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("setting up anonymous session directory: %s", err)
+	}
+	if err := os.CopyFS(dir, fs); err != nil {
+		return fmt.Errorf("setting up anonymous session directory: %s", err)
+	}
+	return nil
 }

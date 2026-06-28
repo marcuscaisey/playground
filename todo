@@ -3,6 +3,8 @@
 * Respect $EDITOR
 * Custom template
 * Error handling from run.sh
+* Validate session and template name
+* Offer to save anonymous session after closing nvim
 * Start new tmux session if not already in one
 * Context / signal handling
 * README

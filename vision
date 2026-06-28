@@ -1,6 +1,6 @@
 * Run like "pg python" or "pg python pydantic"
     * "pg python" opens an anonymous session stored under "~/.pg/sessions/anonymous/python-$timestamp"
-    * "pg python pydantic" opens a named session called "pydantic" stored at "~/.pg/sessions/pydantic"
+    * "pg python pydantic" opens a named session called "pydantic" stored at "~/.pg/sessions/named/pydantic"
 * Python file opened in editor populated with template for python script
     * Editor is taken from $EDITOR
     * ~/.pg/templates/python is searched for template
