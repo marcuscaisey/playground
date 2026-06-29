@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"embed"
 	"errors"
 	"flag"
@@ -8,9 +10,11 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -39,7 +43,8 @@ func cli() int {
 		fmt.Fprintln(os.Stderr, "Options:")
 		flag.PrintDefaults()
 	}
-	printHelp := flag.Bool("help", false, "Print this message")
+	editor := flag.String("editor", "", fmt.Sprintf("Editor to open; falls back to $%s and then %q.", editorEnvVar, defaultEditor))
+	printHelp := flag.Bool("help", false, "Print this message.")
 
 	flag.Parse()
 
@@ -48,7 +53,9 @@ func cli() int {
 		return 0
 	}
 
-	if err := pg(flag.Args()); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer stop()
+	if err := pg(ctx, flag.Args(), *editor); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		if _, ok := errors.AsType[cliError](err); ok {
 			flag.Usage()
@@ -60,8 +67,13 @@ func cli() int {
 	return 0
 }
 
+const (
+	editorEnvVar = "EDITOR"
+	defaultEditor = "vi"
+)
+
 // TODO: fill in
-func pg(args []string) error {
+func pg(ctx context.Context, args []string, editor string) (err error) {
 	if len(args) < 1 {
 		return newCliErrorf("template name not provided")
 	}
@@ -103,17 +115,29 @@ func pg(args []string) error {
 		return err
 	}
 
-	closeResultsPane, err := runInNewTmuxPane("watch date")
+	closeResultsPane, err := runInNewTmuxPane(ctx, "watch date")
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err := closeResultsPane(); err != nil {
-			fmt.Fprintf(os.Stderr, "closing results tmux pane: %s", err)
+		if closeErr := closeResultsPane(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("closing results pane: %s", closeErr))
 		}
 	}()
 
-	time.Sleep(5 * time.Second)
+	if editor == "" {
+		editor = os.Getenv(editorEnvVar)
+	}
+	if editor == "" {
+		editor = defaultEditor
+	}
+	editorCmd := exec.CommandContext(ctx, editor, template.Entrypoint)
+	editorCmd.Stdin = os.Stdin
+	editorCmd.Stdout = os.Stdout
+	editorCmd.Stderr = os.Stderr
+	if err := editorCmd.Run(); err != nil {
+		return fmt.Errorf("running %q: %s", editor, cmdErrMsg(err))
+	}
 
 	return nil
 }
@@ -215,22 +239,25 @@ func loadTemplate(name string) (template, error) {
 // runInNewTmuxPane splits the current tmux pane vertically and runs a command in the new pane,
 // leaving the current pane selected.
 // The returned function closes the new pane.
-func runInNewTmuxPane(cmd string) (func() error, error) {
-	if _, ok := os.LookupEnv("TMUX"); !ok {
+func runInNewTmuxPane(ctx context.Context, cmd string) (func() error, error) {
+	paneID, ok := os.LookupEnv("TMUX_PANE")
+	if !ok {
 		return nil, fmt.Errorf("splitting tmux window: not currently in a tmux session")
 	}
 
-	tmuxCmd := exec.Command("tmux", "split-window", "-d", "-P", "-F", "#{pane_id}", cmd)
+	tmuxCmd := exec.CommandContext(ctx, "tmux", "split-window", "-t", paneID, "-d", "-P", "-F", "#{pane_id}", cmd)
 	output, err := tmuxCmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("splitting tmux window: %s", cmdErrMsg(err))
 	}
-	paneID := strings.TrimSpace(string(output))
+	newPaneID := strings.TrimSpace(string(output))
 
 	return func() error {
-		cmd := exec.Command("tmux", "kill-pane", "-t", paneID)
+		// We don't propagate the context to this command since we want to make sure that it can run
+		// even if the context has been cancelled.
+		cmd := exec.Command("tmux", "kill-pane", "-t", newPaneID)
 		if _, err = cmd.Output(); err != nil {
-			return fmt.Errorf("killing tmux pane %q: %s", paneID, cmdErrMsg(err))
+			return fmt.Errorf("killing tmux pane %q: %s", newPaneID, cmdErrMsg(err))
 		}
 		return nil
 	}, nil
@@ -240,8 +267,8 @@ func runInNewTmuxPane(cmd string) (func() error, error) {
 // If possible, the stderr output is extracted from the error. Otherwise, the value of [error.Error]
 // is returned.
 func cmdErrMsg(err error) string {
-	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-		return string(exitErr.Stderr)
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && len(exitErr.Stderr) > 0 {
+		return string(bytes.TrimSpace(exitErr.Stderr))
 	}
 	return err.Error()
 }
