@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -22,45 +23,54 @@ func main() {
 	os.Exit(cli())
 }
 
-// cliError records an incorrect usage of the CLI.
-type cliError string
-
-func (e cliError) Error() string {
-	return string(e)
-}
-
-func newCliErrorf(format string, a ...any) cliError {
-	return cliError(fmt.Sprintf(format, a...))
-}
-
 // cli parses the CLI args, runs pg, reports any errors, and returns the process exit code.
 //
 // It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
 func cli() int {
-	flag.Usage = func() {
+	// [flag.Parse] emits parsing errors without:
+	//   - "error: " before the error message
+	//   - A newline betweeen the error message and the usage text
+	// We use our own [flag.FlagSet] so that we can we can format the output how we want.
+	flagSet := flag.NewFlagSet("pg", flag.ContinueOnError)
+	flagSet.SetOutput(io.Discard)
+	usage := func() {
 		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name>")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Options:")
-		flag.PrintDefaults()
+		flagSet.SetOutput(nil)
+		defer flagSet.SetOutput(io.Discard)
+		flagSet.PrintDefaults()
 	}
-	editor := flag.String("editor", "", fmt.Sprintf("Editor to open; falls back to $%s and then %q.", editorEnvVar, defaultEditor))
-	printHelp := flag.Bool("help", false, "Print this message.")
+	usageErrorf := func(msg string, a ...any) int {
+		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
+		usage()
+		return 2
+	}
 
-	flag.Parse()
+	editor := flagSet.String("editor", "", fmt.Sprintf("Editor to open; falls back to $%s, then %q.", editorEnvVar, defaultEditor))
+	printHelp := flagSet.Bool("help", false, "Print this message.")
+
+	if err := flagSet.Parse(os.Args[1:]); err != nil {
+		return usageErrorf("%s", err)
+	}
 
 	if *printHelp {
-		flag.Usage()
+		usage()
 		return 0
+	}
+
+	templateName := flagSet.Arg(0)
+	if templateName == "" {
+		return usageErrorf("template name not provided")
+	}
+	if args := flagSet.Args(); len(args) > 1 {
+		return usageErrorf("unexpected arguments: %s", strings.Join(args[1:], ", "))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	if err := pg(ctx, flag.Args(), *editor); err != nil {
+	if err := pg(ctx, templateName, *editor); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
-		if _, ok := errors.AsType[cliError](err); ok {
-			flag.Usage()
-			return 2
-		}
 		return 1
 	}
 
@@ -68,19 +78,12 @@ func cli() int {
 }
 
 const (
-	editorEnvVar = "EDITOR"
+	editorEnvVar  = "EDITOR"
 	defaultEditor = "vi"
 )
 
 // TODO: fill in
-func pg(ctx context.Context, args []string, editor string) (err error) {
-	if len(args) < 1 {
-		return newCliErrorf("template name not provided")
-	}
-	if len(args) > 1 {
-		return newCliErrorf("unexpected arguments: %s", strings.Join(args, ", "))
-	}
-
+func pg(ctx context.Context, templateName string, editor string) (err error) {
 	// 1. Load template
 	// 2. Create session directory
 	// 3. CD to session directory
@@ -88,7 +91,6 @@ func pg(ctx context.Context, args []string, editor string) (err error) {
 	// 5. Start nvim in top pane
 	// 6. Start pg in runner mode in bottom pane
 
-	templateName := args[0]
 	template, err := loadTemplate(templateName)
 	if err != nil {
 		if errors.Is(err, errTemplateNotFound) {
