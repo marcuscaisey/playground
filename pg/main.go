@@ -127,12 +127,7 @@ func pg(ctx context.Context, templateName string, editor string) (err error) {
 		}
 	}()
 
-	if editor == "" {
-		editor = os.Getenv(editorEnvVar)
-	}
-	if editor == "" {
-		editor = defaultEditor
-	}
+	editor = cmp.Or(editor, os.Getenv(editorEnvVar), defaultEditor)
 	editorCmd := exec.CommandContext(ctx, editor, template.Entrypoint)
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
