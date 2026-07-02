@@ -61,7 +61,7 @@ func sessionCLI(ctx context.Context, args []string) int {
 	printHelp := flagSet.Bool("help", false, "Print this message.")
 
 	usage := func() {
-		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name>")
+		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Options:")
 		flagSet.SetOutput(nil)
@@ -87,7 +87,8 @@ func sessionCLI(ctx context.Context, args []string) int {
 	if templateName == "" {
 		return usageErrorf("template name not provided")
 	}
-	if args := flagSet.Args(); len(args) > 1 {
+	sessionName := flagSet.Arg(1)
+	if args := flagSet.Args(); len(args) > 2 {
 		return usageErrorf("unexpected arguments: %s", strings.Join(args[1:], ", "))
 	}
 
@@ -96,7 +97,7 @@ func sessionCLI(ctx context.Context, args []string) int {
 		return errorExit(err)
 	}
 	editor := cmp.Or(*editorFlag, os.Getenv(editorEnvVar), defaultEditor)
-	if err := runSession(ctx, pgPath, templateName, editor); err != nil {
+	if err := runSession(ctx, pgPath, templateName, sessionName, editor); err != nil {
 		return errorExit(err)
 	}
 
@@ -126,10 +127,13 @@ func errorExit(err error) int {
 }
 
 // runSession runs a session using the given template.
-// It creates the session directory, copies the template files into it, starts the results command
-// in a new tmux pane, and opens the template entrypoint in the given editor.
+// It sets up the session directory (creates it and copies in the template's files), starts the
+// results command in a new tmux pane, and opens the template's entrypoint in the given editor.
+// If the session is named (sessionName != ""), then its directory is set up in the named sessions
+// directory if it doesn't already exist. Otherwise, the session is anonymous and it's set up in the
+// anonymous sessions directory with a generated name.
 // pgPath must be the absolute path to the pg executable. This is used to start the results command.
-func runSession(ctx context.Context, pgPath string, templateName string, editor string) (err error) {
+func runSession(ctx context.Context, pgPath string, templateName string, sessionName string, editor string) (err error) {
 	template, err := loadTemplate(templateName)
 	if err != nil {
 		if errors.Is(err, errTemplateNotFound) {
@@ -145,12 +149,22 @@ func runSession(ctx context.Context, pgPath string, templateName string, editor 
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	sessionDir, err := anonSessionDir(template.Name)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("running session: %s", err)
+		return fmt.Errorf("running session: setting up session directory: %s", err)
 	}
-	if err := setupSessionDir(sessionDir, template.FS); err != nil {
+	sessionType := "named"
+	if sessionName == "" {
+		sessionType = "anonymous"
+		sessionName = fmt.Sprintf("%s-%s", templateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
+	}
+	sessionDir := filepath.Join(homeDir, ".pg", "sessions", sessionType, sessionName)
+	if ok, err := fileExists(sessionDir); err != nil {
 		return fmt.Errorf("running session: %s", err)
+	} else if !ok {
+		if err := setupSessionDir(sessionDir, template.FS); err != nil {
+			return fmt.Errorf("running session: %s", err)
+		}
 	}
 
 	resultsCmd := fmt.Sprintf("%q %s %q %q", pgPath, resultsCmd, sessionDir, template.Entrypoint)
@@ -284,11 +298,10 @@ func loadTemplate(name string) (template, error) {
 		return template{}, fmt.Errorf("loading template %q: %s", name, err)
 	}
 	// [fs.Sub] doesn't check whether the dir exists, so we need to explicity check.
-	if _, err := fs.Stat(templateFS, "."); err != nil {
-		if os.IsNotExist(err) {
-			return template{}, fmt.Errorf("loading template %q: %w", name, errTemplateNotFound)
-		}
-		return template{}, err
+	if ok, err := fileExistsFS(templateFS, "."); err != nil {
+		return template{}, fmt.Errorf("loading template %q: %s", name, err)
+	} else if !ok {
+		return template{}, fmt.Errorf("loading template %q: %w", name, errTemplateNotFound)
 	}
 
 	const entrypointPattern = "main.*"
@@ -312,12 +325,11 @@ func loadTemplate(name string) (template, error) {
 		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
 	}
 
-	if _, err := fs.Stat(templateFS, runScriptFilename); err != nil {
-		if os.IsNotExist(err) {
-			templateInvalidErr := newTemplateInvalidErrorf(name, "", "run script (%q file) is missing", runScriptFilename)
-			return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
-		}
-		return template{}, err
+	if ok, err := fileExistsFS(templateFS, runScriptFilename); err != nil {
+		return template{}, fmt.Errorf("loading template %q: %s", name, err)
+	} else if !ok {
+		templateInvalidErr := newTemplateInvalidErrorf(name, "", "run script (%q file) is missing", runScriptFilename)
+		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
 	}
 
 	return template{
@@ -325,15 +337,6 @@ func loadTemplate(name string) (template, error) {
 		FS:         templateFS,
 		Entrypoint: entrypoint,
 	}, nil
-}
-
-func anonSessionDir(templateName string) (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("generating anonymous session directory name for template %q: %s", templateName, err)
-	}
-	sessionName := fmt.Sprintf("%s-%s", templateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
-	return filepath.Join(homeDir, ".pg", "sessions", "anonymous", sessionName), nil
 }
 
 // setupSessionDir creates the directory for a session and copies the template files into it.
@@ -450,4 +453,26 @@ func cmdErrMsg(err error) string {
 		return string(bytes.TrimSpace(exitErr.Stderr))
 	}
 	return err.Error()
+}
+
+func fileExists(name string) (bool, error) {
+	_, err := os.Stat(name)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return true, err
+}
+
+func fileExistsFS(f fs.FS, name string) (bool, error) {
+	_, err := fs.Stat(f, name)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return true, err
 }

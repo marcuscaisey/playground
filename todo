@@ -1,4 +1,3 @@
-* Named session
 * Custom template
 * Validate session and template name (doesn't contain /)
 * Offer to save anonymous session after closing editor
