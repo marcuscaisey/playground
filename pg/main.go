@@ -129,11 +129,12 @@ func errorExit(err error) int {
 const pgDir = ".pg"
 
 // runSession runs a session using the given template.
-// It sets up the session directory (creates it and copies in the template's files), starts the
-// results command in a new tmux pane, and opens the template's entrypoint in the given editor.
+// It sets up the session directory (creates it and copies in the template's files) if it doesn't
+// already exist, starts the results command in a new tmux pane, and opens the template's entrypoint
+// in the given editor.
 // If the session is named (sessionName != ""), then its directory is set up in the named sessions
-// directory if it doesn't already exist. Otherwise, the session is anonymous and it's set up in the
-// anonymous sessions directory with a generated name.
+// directory. Otherwise, the session is anonymous and it's set up in the anonymous sessions
+// directory with a generated name.
 // pgPath must be the absolute path to the pg executable. This is used to start the results command.
 func runSession(ctx context.Context, pgPath string, templateName string, sessionName string, editor string) (err error) {
 	homeDir, err := os.UserHomeDir()
@@ -162,10 +163,11 @@ func runSession(ctx context.Context, pgPath string, templateName string, session
 		sessionName = fmt.Sprintf("%s-%s", templateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
 	}
 	sessionDir := filepath.Join(homeDir, pgDir, "sessions", sessionType, sessionName)
+	// TODO: move this logic into setupSessionDir?
 	if ok, err := fileExists(sessionDir); err != nil {
 		return fmt.Errorf("running session: %s", err)
 	} else if !ok {
-		if err := setupSessionDir(sessionDir, template.FS); err != nil {
+		if err := setupSessionDir(sessionDir, template); err != nil {
 			return fmt.Errorf("running session: %s", err)
 		}
 	}
@@ -265,6 +267,7 @@ const runScriptFilename = "run.sh"
 //   - Any other files needed to run the session
 type template struct {
 	Name       string // Template name; matches the template directory name.
+	IsBuiltin  bool   // Whether the template is built-in.
 	FS         fs.FS  // File system containing the template's files.
 	Entrypoint string // Entrypoint filename, such as "main.go".
 }
@@ -299,6 +302,7 @@ func newTemplateInvalidErrorf(name string, path string, reason string, a ...any)
 func loadTemplate(homeDir string, name string) (template, error) {
 	userTemplatePath := filepath.Join(homeDir, pgDir, "templates", name)
 	var templateFS fs.FS
+	isBuiltin := false
 	if ok, err := fileExists(userTemplatePath); err != nil {
 		return template{}, fmt.Errorf("loading template %q: %s", name, err)
 	} else if ok {
@@ -308,6 +312,7 @@ func loadTemplate(homeDir string, name string) (template, error) {
 		if err != nil {
 			return template{}, fmt.Errorf("loading template %q: %s", name, err)
 		}
+		isBuiltin = true
 		// [fs.Sub] doesn't check whether the dir exists, so we need to explicity check.
 		if ok, err := fileExistsFS(templateFS, "."); err != nil {
 			return template{}, fmt.Errorf("loading template %q: %s", name, err)
@@ -346,18 +351,30 @@ func loadTemplate(homeDir string, name string) (template, error) {
 
 	return template{
 		Name:       name,
+		IsBuiltin:  isBuiltin,
 		FS:         templateFS,
 		Entrypoint: entrypoint,
 	}, nil
 }
 
-// setupSessionDir creates the directory for a session and copies the template files into it.
-func setupSessionDir(dir string, templateFS fs.FS) error {
+// setupSessionDir creates the directory for a session and copies the template's files into it.
+func setupSessionDir(dir string, template template) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("setting up session directory: %s", err)
 	}
-	if err := os.CopyFS(dir, templateFS); err != nil {
+	if err := os.CopyFS(dir, template.FS); err != nil {
 		return fmt.Errorf("setting up session directory: %s", err)
+	}
+	// From the [embed] docs: "Patterns must not match files outside the package's module, such as
+	// ‘.git/*’, symbolic links, 'vendor/', or any directories containing go.mod (these are separate
+	// modules).". This prevents us from including a go.mod file in the built-in Go template.
+	// To work around this, we just write one ourselves at this point.
+	if template.Name == "go" && template.IsBuiltin {
+		path := filepath.Join(dir, "go.mod")
+		data := []byte("module playground\n")
+		if err := os.WriteFile(path, data, 0o666); err != nil {
+			return fmt.Errorf("setting up session directory: writing built-in go template go.mod: %s", err)
+		}
 	}
 	return nil
 }
