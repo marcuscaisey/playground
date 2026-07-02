@@ -26,6 +26,13 @@ const pgDir = ".pg"
 // directory with a generated name.
 // pgPath must be the absolute path to the pg executable. This is used to start the results command.
 func runSession(ctx context.Context, pgPath string, templateName string, sessionName string, editor string) (err error) {
+	if strings.ContainsRune(templateName, os.PathSeparator) {
+		return fmt.Errorf("template name %q is invalid: must not contain %q", templateName, os.PathSeparator)
+	}
+	if strings.ContainsRune(sessionName, os.PathSeparator) {
+		return fmt.Errorf("session name %q is invalid: must not contain %q", sessionName, os.PathSeparator)
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("running session: setting up session directory: %s", err)
