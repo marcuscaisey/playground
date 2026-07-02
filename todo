@@ -1,12 +1,13 @@
-* Anonymous session with built in template
 * Named session
 * Custom template
-* Error handling from run.sh
-* Validate session and template name
-* Offer to save anonymous session after closing nvim
+* Validate session and template name (doesn't contain /)
+* Offer to save anonymous session after closing editor
 * Start new tmux session if not already in one
 * Move cursor to specific line in entrypoint (see hsandbox <cursor>)
+* Add -session-dir flag (backed by $SESSION_DIR)
 * Run outside of tmux?
+* Autocomplete template and session names
+* Protect results pane from being closed (should still be able to select it though)
 * README
     * Motiviation
     * Demo
