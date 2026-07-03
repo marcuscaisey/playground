@@ -1,14 +1,16 @@
+* Add -sessions-dir flag (backed by $PG_SESSIONS_DIR)
+* Move anonymous session to tmp dir and offer to save after closing editor
 * XDG directory / standard locations for sessions and templates
-* Offer to save anonymous session after closing editor
 * Start new tmux session if not already in one
 * Move cursor to specific line in entrypoint (see hsandbox <cursor>)
-* Add -session-dir flag (backed by $SESSION_DIR)
-* Should named sessions be saved under sessions/$template?
 * Autocomplete template and session names
 * Protect results pane from being closed (should still be able to select it though)
 * Add venv to python3 run.sh
 * Make split from editor pane open in session directory
+* Should it be possible to accept input from stdin in the results pane?
+* Add documentation to -help output
 * README
     * Motiviation
     * Demo
     * Mention https://labix.org/hsandbox as inspiration
+    * Dependencies -- bash, tmux

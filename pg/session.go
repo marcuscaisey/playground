@@ -53,12 +53,12 @@ func runSession(ctx context.Context, pgPath string, templateName string, session
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	sessionType := "named"
+	sessionsSubDir := templateName
 	if sessionName == "" {
-		sessionType = "anonymous"
+		sessionsSubDir = "anonymous"
 		sessionName = fmt.Sprintf("%s-%s", templateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
 	}
-	sessionDir := filepath.Join(homeDir, pgDir, "sessions", sessionType, sessionName)
+	sessionDir := filepath.Join(homeDir, pgDir, "sessions", sessionsSubDir, sessionName)
 	// TODO: move this logic into setupSessionDir?
 	if ok, err := fileExists(sessionDir); err != nil {
 		return fmt.Errorf("running session: %s", err)
