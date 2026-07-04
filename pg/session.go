@@ -73,6 +73,9 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	resultsCmd := fmt.Sprintf("%q %s %q %q", opts.PgPath, resultsCmd, sessionDir, template.Entrypoint)
 	closeResultsPane, err := runInNewTmuxPane(ctx, resultsCmd)
 	if err != nil {
+		if errors.Is(err, errTmuxNotFound) {
+			return errors.New("tmux not found in $PATH")
+		}
 		return fmt.Errorf("running session: %s", err)
 	}
 	defer func() {
@@ -221,6 +224,8 @@ func setupSessionDir(dir string, template template) error {
 	return nil
 }
 
+var errTmuxNotFound = errors.New("tmux not found in $PATH")
+
 // runInNewTmuxPane splits the current tmux pane vertically and runs a command in the new pane,
 // leaving the current pane selected.
 // The returned function closes the new pane.
@@ -233,6 +238,9 @@ func runInNewTmuxPane(ctx context.Context, cmd string) (func() error, error) {
 	tmuxCmd := exec.CommandContext(ctx, "tmux", "split-window", "-t", paneID, "-d", "-P", "-F", "#{pane_id}", cmd)
 	output, err := tmuxCmd.Output()
 	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return nil, fmt.Errorf("running %q in new tmux pane: %w", cmd, errTmuxNotFound)
+		}
 		return nil, fmt.Errorf("running %q in new tmux pane: splitting tmux window: %s", cmd, cmdErrMsg(err))
 	}
 	newPaneID := strings.TrimSpace(string(output))

@@ -13,4 +13,5 @@
     * Demo
     * Mention https://labix.org/hsandbox as inspiration
     * Dependencies -- bash, tmux
+    * No windows support
 * Build binary for all platforms
