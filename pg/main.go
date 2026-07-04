@@ -44,18 +44,17 @@ func sessionCLI(ctx context.Context, args []string) int {
 	flagSet := flag.NewFlagSet("pg", flag.ContinueOnError)
 	flagSet.SetOutput(io.Discard)
 
-	homeDir, err := os.UserHomeDir()
+	dataDir, err := xdgDataHome()
 	if err != nil {
 		return errorExit(err)
 	}
-	dataDir := filepath.Join(homeDir, ".pg")
 
 	const (
 		editorEnvVar      = "EDITOR"
 		defaultEditor     = "vi"
 		sessionsDirEnvVar = "PG_SESSIONS_DIR"
 	)
-	defaultSessionsDir := filepath.Join(dataDir, "sessions")
+	defaultSessionsDir := filepath.Join(dataDir, "pg", "sessions")
 	editorFlag := flagSet.String("editor", "", fmt.Sprintf("Editor to open; falls back to $%s, then %q.", editorEnvVar, defaultEditor))
 	sessionsDirFlag := flagSet.String("sessions-dir", "", fmt.Sprintf("Where named sessions are stored; falls back to $%s, then %q.", sessionsDirEnvVar, defaultSessionsDir))
 	printHelp := flagSet.Bool("help", false, "Print this message.")
@@ -92,12 +91,16 @@ func sessionCLI(ctx context.Context, args []string) int {
 		return usageErrorf("unexpected arguments: %s", strings.Join(args[1:], ", "))
 	}
 
+	configDir, err := xdgConfigHome()
+	if err != nil {
+		return errorExit(err)
+	}
 	pgPath, err := os.Executable()
 	if err != nil {
 		return errorExit(err)
 	}
 	opts := runSessionOptions{
-		UserTemplatesDir: filepath.Join(dataDir, "templates"),
+		UserTemplatesDir: filepath.Join(configDir, "pg", "templates"),
 		PgPath:           pgPath,
 		TemplateName:     templateName,
 		SessionName:      sessionName,
@@ -109,6 +112,28 @@ func sessionCLI(ctx context.Context, args []string) int {
 	}
 
 	return 0
+}
+
+func xdgDataHome() (string, error) {
+	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
+		return dir, nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".local", "share"), nil
+}
+
+func xdgConfigHome() (string, error) {
+	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		return dir, nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".config"), nil
 }
 
 // resultsCLI parses the args for the results command, prints the results for a session, reports any
