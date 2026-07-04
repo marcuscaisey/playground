@@ -1,5 +1,5 @@
-* Move anonymous session to tmp dir and offer to save after closing editor
 * XDG directory / standard locations for sessions and templates
+* Offer to save after closing editor
 * Start new tmux session if not already in one
 * Move cursor to specific line in entrypoint (see hsandbox <cursor>)
 * Autocomplete template and session names
@@ -13,3 +13,4 @@
     * Demo
     * Mention https://labix.org/hsandbox as inspiration
     * Dependencies -- bash, tmux
+* Build binary for all platforms

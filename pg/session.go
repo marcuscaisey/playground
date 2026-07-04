@@ -28,9 +28,9 @@ type runSessionOptions struct {
 // It sets up the session directory (creates it and copies in the template's files) if it doesn't
 // already exist, starts the results command in a new tmux pane, and opens the template's entrypoint
 // in the given editor.
-// If the session is named, then its directory is set up in the named sessions directory. Otherwise,
-// the session is anonymous and it's set up in the anonymous sessions directory with a generated
-// name.
+// If the session is named, then its directory is set up in the sessions directory, named after the
+// session. Otherwise, the session is anonymous and its directory is set up in a temporary directory
+// with a generated name.
 func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	if strings.ContainsRune(opts.TemplateName, os.PathSeparator) {
 		return fmt.Errorf("template name %q is invalid: must not contain %q", opts.TemplateName, os.PathSeparator)
@@ -54,14 +54,14 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	sessionsSubDir := opts.TemplateName
-	sessionName := opts.SessionName
-	if sessionName == "" {
-		sessionsSubDir = "anonymous"
-		sessionName = fmt.Sprintf("%s-%s", opts.TemplateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
+	sessionDir := filepath.Join(opts.SessionsDir, opts.TemplateName, opts.SessionName)
+	if opts.SessionName == "" {
+		sessionName := fmt.Sprintf("%s-%s", opts.TemplateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
+		sessionDir = filepath.Join(os.TempDir(), "playground", sessionName)
+		// We can ignore this error since the temp directory will typically be cleared out by the OS
+		// anyway.
+		defer os.RemoveAll(sessionDir) // nolint:errcheck
 	}
-	sessionDir := filepath.Join(opts.SessionsDir, sessionsSubDir, sessionName)
-	// TODO: move this logic into setupSessionDir?
 	if ok, err := fileExists(sessionDir); err != nil {
 		return fmt.Errorf("running session: %s", err)
 	} else if !ok {
