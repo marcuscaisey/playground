@@ -260,21 +260,19 @@ func cmdErrMsg(err error) string {
 
 func fileExists(name string) (bool, error) {
 	_, err := os.Stat(name)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return true, err
+	return fileExistsResult(err)
 }
 
 func fileExistsFS(f fs.FS, name string) (bool, error) {
 	_, err := fs.Stat(f, name)
+	return fileExistsResult(err)
+}
+
+func fileExistsResult(err error) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
 	return true, err
