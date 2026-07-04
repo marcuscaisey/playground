@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 )
@@ -43,11 +44,20 @@ func sessionCLI(ctx context.Context, args []string) int {
 	flagSet := flag.NewFlagSet("pg", flag.ContinueOnError)
 	flagSet.SetOutput(io.Discard)
 
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return errorExit(err)
+	}
+	dataDir := filepath.Join(homeDir, ".pg")
+
 	const (
-		editorEnvVar  = "EDITOR"
-		defaultEditor = "vi"
+		editorEnvVar      = "EDITOR"
+		defaultEditor     = "vi"
+		sessionsDirEnvVar = "PG_SESSIONS_DIR"
 	)
+	defaultSessionsDir := filepath.Join(dataDir, "sessions")
 	editorFlag := flagSet.String("editor", "", fmt.Sprintf("Editor to open; falls back to $%s, then %q.", editorEnvVar, defaultEditor))
+	sessionsDirFlag := flagSet.String("sessions-dir", "", fmt.Sprintf("Where named sessions are stored; falls back to $%s, then %q.", sessionsDirEnvVar, defaultSessionsDir))
 	printHelp := flagSet.Bool("help", false, "Print this message.")
 
 	usage := func() {
@@ -86,8 +96,15 @@ func sessionCLI(ctx context.Context, args []string) int {
 	if err != nil {
 		return errorExit(err)
 	}
-	editor := cmp.Or(*editorFlag, os.Getenv(editorEnvVar), defaultEditor)
-	if err := runSession(ctx, pgPath, templateName, sessionName, editor); err != nil {
+	opts := runSessionOptions{
+		UserTemplatesDir: filepath.Join(dataDir, "templates"),
+		PgPath:           pgPath,
+		TemplateName:     templateName,
+		SessionName:      sessionName,
+		Editor:           cmp.Or(*editorFlag, os.Getenv(editorEnvVar), defaultEditor),
+		SessionsDir:      cmp.Or(*sessionsDirFlag, os.Getenv(sessionsDirEnvVar), defaultSessionsDir),
+	}
+	if err := runSession(ctx, opts); err != nil {
 		return errorExit(err)
 	}
 

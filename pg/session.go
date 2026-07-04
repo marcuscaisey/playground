@@ -15,33 +15,34 @@ import (
 	"time"
 )
 
-const pgDir = ".pg"
+type runSessionOptions struct {
+	TemplateName     string // Template name.
+	SessionName      string // Session name; if empty, session is anonymous with generated name.
+	Editor           string // Editor to open.
+	SessionsDir      string // Absolute path to sessions directory.
+	UserTemplatesDir string // Absolute path to user's templates directory.
+	PgPath           string // Absolute path to pg executable; used to start the results command.
+}
 
 // runSession runs a session using the given template.
 // It sets up the session directory (creates it and copies in the template's files) if it doesn't
 // already exist, starts the results command in a new tmux pane, and opens the template's entrypoint
 // in the given editor.
-// If the session is named (sessionName != ""), then its directory is set up in the named sessions
-// directory. Otherwise, the session is anonymous and it's set up in the anonymous sessions
-// directory with a generated name.
-// pgPath must be the absolute path to the pg executable. This is used to start the results command.
-func runSession(ctx context.Context, pgPath string, templateName string, sessionName string, editor string) (err error) {
-	if strings.ContainsRune(templateName, os.PathSeparator) {
-		return fmt.Errorf("template name %q is invalid: must not contain %q", templateName, os.PathSeparator)
+// If the session is named, then its directory is set up in the named sessions directory. Otherwise,
+// the session is anonymous and it's set up in the anonymous sessions directory with a generated
+// name.
+func runSession(ctx context.Context, opts runSessionOptions) (err error) {
+	if strings.ContainsRune(opts.TemplateName, os.PathSeparator) {
+		return fmt.Errorf("template name %q is invalid: must not contain %q", opts.TemplateName, os.PathSeparator)
 	}
-	if strings.ContainsRune(sessionName, os.PathSeparator) {
-		return fmt.Errorf("session name %q is invalid: must not contain %q", sessionName, os.PathSeparator)
-	}
-
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("running session: setting up session directory: %s", err)
+	if strings.ContainsRune(opts.SessionName, os.PathSeparator) {
+		return fmt.Errorf("session name %q is invalid: must not contain %q", opts.SessionName, os.PathSeparator)
 	}
 
-	template, err := loadTemplate(homeDir, templateName)
+	template, err := loadTemplate(opts.TemplateName, opts.UserTemplatesDir)
 	if err != nil {
 		if errors.Is(err, errTemplateNotFound) {
-			return fmt.Errorf("template %q not found", templateName)
+			return fmt.Errorf("template %q not found", opts.TemplateName)
 		}
 		if templateInvalidErr, ok := errors.AsType[*templateInvalidError](err); ok {
 			templateSrc := fmt.Sprintf("built-in template %q", templateInvalidErr.Name)
@@ -53,12 +54,13 @@ func runSession(ctx context.Context, pgPath string, templateName string, session
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	sessionsSubDir := templateName
+	sessionsSubDir := opts.TemplateName
+	sessionName := opts.SessionName
 	if sessionName == "" {
 		sessionsSubDir = "anonymous"
-		sessionName = fmt.Sprintf("%s-%s", templateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
+		sessionName = fmt.Sprintf("%s-%s", opts.TemplateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
 	}
-	sessionDir := filepath.Join(homeDir, pgDir, "sessions", sessionsSubDir, sessionName)
+	sessionDir := filepath.Join(opts.SessionsDir, sessionsSubDir, sessionName)
 	// TODO: move this logic into setupSessionDir?
 	if ok, err := fileExists(sessionDir); err != nil {
 		return fmt.Errorf("running session: %s", err)
@@ -68,7 +70,7 @@ func runSession(ctx context.Context, pgPath string, templateName string, session
 		}
 	}
 
-	resultsCmd := fmt.Sprintf("%q %s %q %q", pgPath, resultsCmd, sessionDir, template.Entrypoint)
+	resultsCmd := fmt.Sprintf("%q %s %q %q", opts.PgPath, resultsCmd, sessionDir, template.Entrypoint)
 	closeResultsPane, err := runInNewTmuxPane(ctx, resultsCmd)
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
@@ -79,13 +81,13 @@ func runSession(ctx context.Context, pgPath string, templateName string, session
 		}
 	}()
 
-	editorCmd := exec.CommandContext(ctx, editor, template.Entrypoint)
+	editorCmd := exec.CommandContext(ctx, opts.Editor, template.Entrypoint)
 	editorCmd.Dir = sessionDir
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
 	if err := editorCmd.Run(); err != nil {
-		return fmt.Errorf("running session with editor %q: %s", editor, cmdErrMsg(err))
+		return fmt.Errorf("running session with editor %q: %s", opts.Editor, cmdErrMsg(err))
 	}
 
 	return nil
@@ -139,8 +141,8 @@ func newTemplateInvalidErrorf(name string, path string, reason string, a ...any)
 // built-in templates.
 // If the template does not exist, the returned error wraps [errTemplateNotFound].
 // If the loaded template is invalid, the returned error wraps [*templateInvalidError].
-func loadTemplate(homeDir string, name string) (template, error) {
-	userTemplatePath := filepath.Join(homeDir, pgDir, "templates", name)
+func loadTemplate(name string, userTemplatesDir string) (template, error) {
+	userTemplatePath := filepath.Join(userTemplatesDir, name)
 	var templateFS fs.FS
 	isBuiltin := false
 	if ok, err := fileExists(userTemplatePath); err != nil {
