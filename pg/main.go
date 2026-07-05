@@ -88,7 +88,7 @@ func sessionCLI(ctx context.Context, args []string) int {
 	}
 	sessionName := flagSet.Arg(1)
 	if args := flagSet.Args(); len(args) > 2 {
-		return usageErrorf("unexpected arguments: %s", strings.Join(args[1:], ", "))
+		return usageErrorf("unexpected arguments: %s", strings.Join(args[2:], ", "))
 	}
 
 	configDir, err := xdgConfigHome()
