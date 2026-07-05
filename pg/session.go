@@ -73,8 +73,8 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		}
 	}
 
-	resultsCmd := fmt.Sprintf("%q %s %q %q", opts.PgPath, resultsCmd, sessionDir, template.Entrypoint)
-	closeResultsPane, err := runInNewTmuxPane(ctx, resultsCmd)
+	resultsPaneCmd := fmt.Sprintf("%s %s %s %s", shellQuote(opts.PgPath), resultsCmd, shellQuote(sessionDir), shellQuote(template.Entrypoint))
+	closeResultsPane, err := runInNewTmuxPane(ctx, resultsPaneCmd)
 	if err != nil {
 		if errors.Is(err, errTmuxNotFound) {
 			return errors.New("tmux not found in $PATH")
@@ -116,6 +116,11 @@ func validateDirNameSafe(name string) error {
 		}
 	}
 	return nil
+}
+
+// shellQuote returns arg quoted so that it can be used as a literal shell command argument.
+func shellQuote(arg string) string {
+	return fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", `'\''`))
 }
 
 //go:embed templates/*
