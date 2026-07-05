@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -173,16 +174,16 @@ func newTemplateInvalidErrorf(name string, path string, reason string, a ...any)
 // If the loaded template is invalid, the returned error wraps [*templateInvalidError].
 func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	isBuiltin := false
-	path := ""
+	templatePath := ""
 	var templateFS fs.FS
 	userTemplatePath := filepath.Join(userTemplatesDir, name)
 	if ok, err := fileExists(userTemplatePath); err != nil {
 		return template{}, fmt.Errorf("loading template %q: %s", name, err)
 	} else if ok {
 		templateFS = os.DirFS(userTemplatePath)
-		path = userTemplatePath
+		templatePath = userTemplatePath
 	} else if !ok {
-		templateFS, err = fs.Sub(builtinTemplatesFS, filepath.Join("templates", name))
+		templateFS, err = fs.Sub(builtinTemplatesFS, path.Join("templates", name))
 		if err != nil {
 			return template{}, fmt.Errorf("loading template %q: %s", name, err)
 		}
@@ -205,21 +206,21 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	case 1:
 		entrypoint = entrypoints[0]
 	case 0:
-		templateInvalidErr := newTemplateInvalidErrorf(name, path, "entrypoint (%q file) is missing", entrypointPattern)
+		templateInvalidErr := newTemplateInvalidErrorf(name, templatePath, "entrypoint (%q file) is missing", entrypointPattern)
 		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
 	default:
 		quotedEntrypoints := make([]string, len(entrypoints))
 		for i, entrypoint := range entrypoints {
 			quotedEntrypoints[i] = strconv.Quote(entrypoint)
 		}
-		templateInvalidErr := newTemplateInvalidErrorf(name, path, "multiple entrypoints: %s", strings.Join(quotedEntrypoints, ", "))
+		templateInvalidErr := newTemplateInvalidErrorf(name, templatePath, "multiple entrypoints: %s", strings.Join(quotedEntrypoints, ", "))
 		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
 	}
 
 	if ok, err := fileExistsFS(templateFS, runScriptFilename); err != nil {
 		return template{}, fmt.Errorf("loading template %q: %s", name, err)
 	} else if !ok {
-		templateInvalidErr := newTemplateInvalidErrorf(name, path, "run script (%q file) is missing", runScriptFilename)
+		templateInvalidErr := newTemplateInvalidErrorf(name, templatePath, "run script (%q file) is missing", runScriptFilename)
 		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
 	}
 
