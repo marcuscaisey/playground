@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type runSessionOptions struct {
@@ -32,11 +33,13 @@ type runSessionOptions struct {
 // session. Otherwise, the session is anonymous and its directory is set up in a temporary directory
 // with a generated name.
 func runSession(ctx context.Context, opts runSessionOptions) (err error) {
-	if strings.ContainsRune(opts.TemplateName, os.PathSeparator) {
-		return fmt.Errorf("template name %q is invalid: must not contain %q", opts.TemplateName, os.PathSeparator)
+	if err := validateDirNameSafe(opts.TemplateName); err != nil {
+		return fmt.Errorf("template name %q is invalid: %s", opts.TemplateName, err)
 	}
-	if strings.ContainsRune(opts.SessionName, os.PathSeparator) {
-		return fmt.Errorf("session name %q is invalid: must not contain %q", opts.SessionName, os.PathSeparator)
+	if opts.SessionName != "" {
+		if err := validateDirNameSafe(opts.SessionName); err != nil {
+			return fmt.Errorf("session name %q is invalid: %s", opts.SessionName, err)
+		}
 	}
 
 	template, err := loadTemplate(opts.TemplateName, opts.UserTemplatesDir)
@@ -93,6 +96,25 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session with editor %q: %s", opts.Editor, cmdErrMsg(err))
 	}
 
+	return nil
+}
+
+// validateDirNameSafe reports whether name is safe to use as a single directory path element.
+func validateDirNameSafe(name string) error {
+	if name == "" {
+		return errors.New("cannot be empty")
+	}
+	if strings.ContainsRune(name, os.PathSeparator) {
+		return fmt.Errorf("cannot contain path separator %q", os.PathSeparator)
+	}
+	if name == "." || name == ".." {
+		return errors.New(`cannot be "." or ".."`)
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("cannot contain unicode control characters (%q)", r)
+		}
+	}
 	return nil
 }
 
