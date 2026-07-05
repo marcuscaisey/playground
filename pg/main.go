@@ -115,25 +115,22 @@ func sessionCLI(ctx context.Context, args []string) int {
 }
 
 func xdgDataHome() (string, error) {
-	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
-		return dir, nil
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(homeDir, ".local", "share"), nil
+	return xdgDir("XDG_DATA_HOME", filepath.Join( ".local", "share"))
 }
 
 func xdgConfigHome() (string, error) {
-	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+	return xdgDir("XDG_CONFIG_HOME", ".config")
+}
+
+func xdgDir(envVar string, homeSubDir string) (string, error) {
+	if dir := os.Getenv(envVar); dir != "" && filepath.IsAbs(dir) {
 		return dir, nil
 	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".config"), nil
+	return filepath.Join(homeDir, homeSubDir), nil
 }
 
 // resultsCLI parses the args for the results command, prints the results for a session, reports any
