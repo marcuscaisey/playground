@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 )
 
@@ -26,9 +25,8 @@ type runSessionOptions struct {
 }
 
 // runSession runs a session using the given template.
-// It sets up the session directory (creates it and copies in the template's files) if it doesn't
-// already exist, starts the results command in a new tmux pane, and opens the template's entrypoint
-// in the given editor.
+// It sets up the session directory, starts the results command in a new tmux pane, and opens the
+// template's entrypoint in the given editor.
 // If the session is named, then its directory is set up in the sessions directory, named after the
 // session. Otherwise, the session is anonymous and its directory is set up in a temporary directory
 // with a generated name.
@@ -37,7 +35,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("template name %q is invalid: %s", opts.TemplateName, err)
 	}
 	if opts.SessionName != "" {
-		if err := validateDirNameSafe(opts.SessionName); err != nil {
+		if err := validateSessionName(opts.SessionName); err != nil {
 			return fmt.Errorf("session name %q is invalid: %s", opts.SessionName, err)
 		}
 	}
@@ -57,27 +55,22 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	sessionDir := filepath.Join(opts.SessionsDir, opts.TemplateName, opts.SessionName)
-	if opts.SessionName == "" {
-		sessionName := fmt.Sprintf("%s-%s", opts.TemplateName, time.Now().Format(fmt.Sprintf("%s-%s", time.DateOnly, time.TimeOnly)))
-		sessionDir = filepath.Join(os.TempDir(), "playground", sessionName)
-		// We can ignore this error since the temp directory will typically be cleared out by the OS
-		// anyway.
-		defer os.RemoveAll(sessionDir) // nolint:errcheck
+	var sessionDir string
+	if opts.SessionName != "" {
+		sessionDir, err = ensureNamedSessionDir(opts.SessionName, opts.SessionsDir, template)
+	} else {
+		sessionDir, err = setupAnonSessionDir(template)
+		defer os.RemoveAll(sessionDir) // nolint:errcheck // It's fine if this fails as it's a temporary directory
 	}
-	if ok, err := fileExists(sessionDir); err != nil {
+	if err != nil {
 		return fmt.Errorf("running session: %s", err)
-	} else if !ok {
-		if err := setupSessionDir(sessionDir, template); err != nil {
-			return fmt.Errorf("running session: %s", err)
-		}
 	}
 
 	resultsPaneCmd := fmt.Sprintf("%s %s %s %s", shellQuote(opts.PgPath), resultsCmd, shellQuote(sessionDir), shellQuote(template.Entrypoint))
 	closeResultsPane, err := runInNewTmuxPane(ctx, resultsPaneCmd)
 	if err != nil {
 		if errors.Is(err, errTmuxNotFound) {
-			return errors.New("tmux not found in $PATH")
+			return fmt.Errorf("tmux not found in $PATH")
 		}
 		return fmt.Errorf("running session: %s", err)
 	}
@@ -102,13 +95,13 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 // validateDirNameSafe reports whether name is safe to use as a single directory path element.
 func validateDirNameSafe(name string) error {
 	if name == "" {
-		return errors.New("cannot be empty")
+		return fmt.Errorf("cannot be empty")
 	}
 	if strings.ContainsRune(name, os.PathSeparator) {
 		return fmt.Errorf("cannot contain path separator %q", os.PathSeparator)
 	}
 	if name == "." || name == ".." {
-		return errors.New(`cannot be "." or ".."`)
+		return fmt.Errorf(`cannot be "." or ".."`)
 	}
 	for _, r := range name {
 		if unicode.IsControl(r) {
@@ -116,6 +109,13 @@ func validateDirNameSafe(name string) error {
 		}
 	}
 	return nil
+}
+
+func validateSessionName(name string) error {
+	if strings.HasPrefix(name, namedSessionStagingDirPrefix) {
+		return fmt.Errorf("cannot use reserved prefix %q", namedSessionStagingDirPrefix)
+	}
+	return validateDirNameSafe(name)
 }
 
 // shellQuote returns arg quoted so that it can be used as a literal shell command argument.
@@ -144,7 +144,7 @@ type template struct {
 	Entrypoint string // Entrypoint filename, such as "main.go".
 }
 
-var errTemplateNotFound = errors.New("not found")
+var errTemplateNotFound = fmt.Errorf("not found")
 
 // templateInvalidError records an invalid template and the reason it's invalid.
 //
@@ -231,18 +231,74 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	}, nil
 }
 
-// setupSessionDir creates the directory for a session and copies the template's files into it.
-func setupSessionDir(dir string, template template) error {
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("setting up session directory: %s", err)
+const namedSessionStagingDirPrefix = ".pg-tmp"
+
+// ensureNamedSessionDir sets up a named session directory in the sessions directory if it doesn't
+// already exist and returns the directory name.
+func ensureNamedSessionDir(sessionName string, sessionsDir string, template template) (string, error) {
+	sessionDir := filepath.Join(sessionsDir, template.Name, sessionName)
+	if ok, err := fileExists(sessionDir); err != nil {
+		return "", fmt.Errorf("setting up session directory: %s", err)
+	} else if ok {
+		return sessionDir, nil
 	}
+
+	// We set up the session in a temporary staging directory first and then move it into place.
+	// This way, if the set up fails, we're not left with a partially set up directory which would
+	// get used by future sessions.
+	sessionDirParent := filepath.Dir(sessionDir)
+	if err := os.MkdirAll(sessionDirParent, 0755); err != nil {
+		return "", fmt.Errorf("setting up session directory: %s", err)
+	}
+	stagingDirNamePattern := fmt.Sprintf("%s-*", namedSessionStagingDirPrefix)
+	stagingDir, err := os.MkdirTemp(sessionDirParent, stagingDirNamePattern)
+	if err != nil {
+		return "", fmt.Errorf("setting up session directory: creating staging directory: %s", err)
+	}
+	defer os.RemoveAll(stagingDir) // nolint:errcheck // It's fine if this fails as it's a hidden directory
+	if err := setupSessionDir(stagingDir, template); err != nil {
+		return "", err
+	}
+	if err := os.Rename(stagingDir, sessionDir); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			// If the directory already exists, there must have been a racing process trying to
+			// create the same session. We can just behave as if the directory had already existed
+			// when we checked and ignore the error.
+			return sessionDir, nil
+		}
+		return "", fmt.Errorf("setting up session directory: moving into place: %s", err)
+	}
+
+	return sessionDir, nil
+}
+
+// setupAnonSessionDir sets up an anonymous session directory in a temporary directory and returns
+// the directory name.
+func setupAnonSessionDir(template template) (string, error) {
+	sessionDirParent := filepath.Join(os.TempDir(), "pg")
+	if err := os.MkdirAll(sessionDirParent, 0755); err != nil {
+		return "", fmt.Errorf("setting up session directory: creating temporary directory: %s", err)
+	}
+	namePattern := fmt.Sprintf("%s-*", template.Name)
+	sessionDir, err := os.MkdirTemp(sessionDirParent, namePattern)
+	if err != nil {
+		return "", fmt.Errorf("setting up session directory: %s", err)
+	}
+	if err := setupSessionDir(sessionDir, template); err != nil {
+		return "", err
+	}
+	return sessionDir, nil
+}
+
+// setupSessionDir copies a template's files into a session directory.
+func setupSessionDir(dir string, template template) error {
 	if err := os.CopyFS(dir, template.FS); err != nil {
 		return fmt.Errorf("setting up session directory: %s", err)
 	}
 	// From the [embed] docs: "Patterns must not match files outside the package's module, such as
 	// ‘.git/*’, symbolic links, 'vendor/', or any directories containing go.mod (these are separate
-	// modules).". This prevents us from including a go.mod file in the built-in Go template.
-	// To work around this, we just write one ourselves at this point.
+	// modules).". This prevents us from including a go.mod file in the built-in Go template
+	// directory so we just write one to the session directory ourselves.
 	if template.Name == "go" && template.IsBuiltin {
 		path := filepath.Join(dir, "go.mod")
 		data := []byte("module playground\n")
@@ -253,7 +309,7 @@ func setupSessionDir(dir string, template template) error {
 	return nil
 }
 
-var errTmuxNotFound = errors.New("tmux not found in $PATH")
+var errTmuxNotFound = fmt.Errorf("tmux not found in $PATH")
 
 // runInNewTmuxPane splits the current tmux pane vertically and runs a command in the new pane,
 // leaving the current pane selected.
