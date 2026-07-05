@@ -81,12 +81,16 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		}
 	}()
 
+	// FIXME: This fails when editor contains args like "nvim -n".
 	editorCmd := exec.CommandContext(ctx, opts.Editor, template.Entrypoint)
 	editorCmd.Dir = sessionDir
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
 	if err := editorCmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return fmt.Errorf("editor %q not found in $PATH", opts.Editor)
+		}
 		return fmt.Errorf("running session with editor %q: %s", opts.Editor, cmdErrMsg(err))
 	}
 
