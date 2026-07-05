@@ -334,7 +334,7 @@ func runInNewTmuxPane(ctx context.Context, cmd string) (func() error, error) {
 		// We don't propagate the context to this command since we want it to run even if the
 		// context gets cancelled.
 		cmd := exec.Command("tmux", "kill-pane", "-t", newPaneID)
-		if _, err = cmd.Output(); err != nil {
+		if _, err := cmd.Output(); err != nil {
 			return fmt.Errorf("killing tmux pane %q: %s", newPaneID, cmdErrMsg(err))
 		}
 		return nil
