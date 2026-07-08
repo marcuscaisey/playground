@@ -49,15 +49,9 @@ func sessionCLI(ctx context.Context, args []string) int {
 		return errorExit(err)
 	}
 
-	const (
-		editorEnvVar      = "EDITOR"
-		defaultEditor     = "vi"
-		sessionsDirEnvVar = "PG_SESSIONS_DIR"
-	)
-	defaultSessionsDir := filepath.Join(dataDir, "pg", "sessions")
-	editorFlag := flagSet.String("editor", "", fmt.Sprintf("Editor to open; falls back to $%s, then %q.", editorEnvVar, defaultEditor))
-	sessionsDirFlag := flagSet.String("sessions-dir", "", fmt.Sprintf("Where named sessions are stored; falls back to $%s, then %q.", sessionsDirEnvVar, defaultSessionsDir))
-	printHelp := flagSet.Bool("help", false, "Print this message.")
+	editor := stringFlagWithEnvVar(flagSet, "editor", "EDITOR", "vi", "Shell `command` to open editor")
+	sessionsDir := stringFlagWithEnvVar(flagSet, "sessions-dir", "PG_SESSIONS_DIR", filepath.Join(dataDir, "pg", "sessions"), "Named sessions `directory`")
+	printHelp := flagSet.Bool("help", false, "Print help message")
 
 	usage := func() {
 		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
@@ -66,6 +60,8 @@ func sessionCLI(ctx context.Context, args []string) int {
 		flagSet.SetOutput(nil)
 		defer flagSet.SetOutput(io.Discard)
 		flagSet.PrintDefaults()
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set.")
 	}
 	usageErrorf := func(msg string, a ...any) int {
 		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
@@ -104,8 +100,8 @@ func sessionCLI(ctx context.Context, args []string) int {
 		PgPath:           pgPath,
 		TemplateName:     templateName,
 		SessionName:      sessionName,
-		Editor:           cmp.Or(*editorFlag, os.Getenv(editorEnvVar), defaultEditor),
-		SessionsDir:      cmp.Or(*sessionsDirFlag, os.Getenv(sessionsDirEnvVar), defaultSessionsDir),
+		Editor:           *editor,
+		SessionsDir:      *sessionsDir,
 	}
 	if err := runSession(ctx, opts); err != nil {
 		return errorExit(err)
@@ -115,11 +111,19 @@ func sessionCLI(ctx context.Context, args []string) int {
 }
 
 func xdgDataHome() (string, error) {
-	return xdgDir("XDG_DATA_HOME", filepath.Join( ".local", "share"))
+	return xdgDir("XDG_DATA_HOME", filepath.Join(".local", "share"))
 }
 
 func xdgConfigHome() (string, error) {
 	return xdgDir("XDG_CONFIG_HOME", ".config")
+}
+
+// stringFlagWithEnvVar returns a string flag which uses the given environment variable as a default
+// when set.
+func stringFlagWithEnvVar(fs *flag.FlagSet, name string, envVar string, defaultValue string, usage string) *string {
+	value := fs.String(name, "", fmt.Sprintf("%s (default %q) [$%s]", usage, defaultValue, envVar))
+	*value = cmp.Or(os.Getenv(envVar), defaultValue)
+	return value
 }
 
 func xdgDir(envVar string, homeSubDir string) (string, error) {
