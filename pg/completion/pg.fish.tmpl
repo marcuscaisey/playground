@@ -1,0 +1,67 @@
+function __pg_is_nth_argument \
+    --description 'Test if current token is the Nth positional argument' \
+    --argument-names n
+    set --local words (commandline --current-process --cut-at-cursor --tokens-expanded)
+    set --local preceding_word
+    set --local argument_count 0
+    # Skip command name
+    for word in $words[2..]
+        switch $word
+            case '-*'
+            case '*'
+                if not contains -- $preceding_word -editor -sessions-dir -completion-script
+                    set argument_count (math $argument_count + 1)
+                end
+        end
+        # @fish-lsp-disable-next-line 4004
+        set preceding_word $word
+    end
+    test $argument_count -eq (math $n - 1)
+end
+
+function __pg --description 'Execute pg with the provided arguments'
+    set --local words (commandline --current-process --cut-at-cursor --tokens-expanded)
+    set --local command $words[1]
+    $command $argv 2>/dev/null
+end
+
+# @fish-lsp-disable-next-line 4004
+function __pg_previous_token --description 'Print the token before the current one'
+    set --local words (commandline --current-process --cut-at-cursor --tokens-expanded)
+    echo $words[-1]
+end
+
+set --local arguments_not_seen '__pg_is_nth_argument 1'
+complete --command pg \
+    --condition $arguments_not_seen \
+    --old-option help \
+    --description "{{.help_description}}"
+
+set --local completion_script_flags_not_seen 'not __fish_seen_argument --old completion-script'
+complete --command pg \
+    --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
+    --old-option editor \
+    --description "{{.editor_description}}" \
+    --exclusive \
+    --arguments '(path filter --type file --perm exec $PATH/* | path basename | sort --unique)\t'
+complete --command pg \
+    --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
+    --old-option sessions-dir \
+    --description "{{.sessions_dir_description}}" \
+    --exclusive \
+    --arguments '(__fish_complete_directories (commandline --current-token --cut-at-cursor) "")'
+complete --command pg --no-files
+complete --command pg \
+    --condition "__pg_is_nth_argument 1 && $completion_script_flags_not_seen" \
+    --arguments '(__pg __complete -shell fish templates)'
+complete --command pg \
+    --condition "__pg_is_nth_argument 2 && $completion_script_flags_not_seen" \
+    --arguments '(__pg __complete -shell fish sessions (__pg_previous_token))'
+
+set --local normal_flags_not_seen 'not __fish_seen_argument --old editor --old sessions-dir'
+complete --command pg \
+    --condition "$arguments_not_seen && $normal_flags_not_seen" \
+    --old-option completion-script \
+    --description "{{.completion_script_description}}" \
+    --exclusive \
+    --arguments "(string split ' ' '{{.completion_script_shell_values}}')\t"

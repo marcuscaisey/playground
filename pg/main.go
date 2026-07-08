@@ -17,15 +17,15 @@ func main() {
 	os.Exit(cli(os.Args))
 }
 
-const resultsCmd = "__results"
-
-// cli parses its args, runs one of the session or results commands, and returns the corresponding
-// exit code.
+// cli parses its args, runs one of the session, complete, or results commands, and returns the
+// corresponding exit code.
 func cli(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	if len(args) > 1 && args[1] == resultsCmd {
+	if len(args) > 1 && args[1] == "__results" {
 		return resultsCLI(ctx, args[2:]) // Drop program name and command.
+	} else if len(args) > 1 && args[1] == "__complete" {
+		return completeCLI(args[2:]) // Drop program name and command.
 	} else {
 		return sessionCLI(ctx, args[1:]) // Drop program name.
 	}
@@ -33,32 +33,45 @@ func cli(args []string) int {
 
 const usageErrorExitCode = 2
 
+const sessionsDirEnvVar = "PG_SESSIONS_DIR"
+
 // sessionCLI parses the args for the session command, runs a session, reports any errors, and
 // returns an exit code.
 // It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
 func sessionCLI(ctx context.Context, args []string) int {
-	// [flag.Parse] emits parsing errors without:
+	// By default, [flag.Parse] emits parsing errors without:
 	//   - "error: " before the error message
 	//   - A blank line betweeen the error message and the usage text
-	// We use our own [flag.FlagSet] so that we can format the output how we want.
-	flagSet := flag.NewFlagSet("pg", flag.ContinueOnError)
+	// We construct our own flag set to control what is emitted:
+	//   - Use [flag.ContinueOnError] error handling so that [*flagSet.Parse] returns parsing
+	//     errors to us instead of exiting. We can then prefix them with "error: " and print a
+	//     blank line where required.
+	//   - Discard all output until required (when we call [*flagSet.PrintDefaults]).
+	//     [*flagSet.Parse] emits parsing errors through [*orderedFlagSet.Output], so we need
+	//     to suppress this since we're going to be emitting these errors ourself.
+	flagSet := newFlagSet("pg", flag.ContinueOnError)
 	flagSet.SetOutput(io.Discard)
 
-	dataDir, err := xdgDataHome()
+	defaultSessionsDir, err := defaultSessionsDir()
 	if err != nil {
 		return errorExit(err)
 	}
+	editor := flagSet.StringWithEnvVar("editor", "EDITOR", "vi", "Shell `command` to open editor")
+	sessionsDir := flagSet.StringWithEnvVar("sessions-dir", sessionsDirEnvVar, defaultSessionsDir, "Named sessions `directory`")
+	completionScriptShell := new(shell)
+	flagSet.Var(completionScriptShell, "completion-script", "Generate a `shell` completion script for bash, zsh, or fish"+`
 
-	editor := stringFlagWithEnvVar(flagSet, "editor", "EDITOR", "vi", "Shell `command` to open editor")
-	sessionsDir := stringFlagWithEnvVar(flagSet, "sessions-dir", "PG_SESSIONS_DIR", filepath.Join(dataDir, "pg", "sessions"), "Named sessions `directory`")
+Example usage:
+	source <(pg -completion-script bash)
+	source <(pg -completion-script zsh)
+	pg -completion-script fish | source`)
 	printHelp := flagSet.Bool("help", false, "Print help message")
 
 	usage := func() {
 		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Options:")
-		flagSet.SetOutput(nil)
-		defer flagSet.SetOutput(io.Discard)
+		flagSet.SetOutput(os.Stderr) // Unsuppress output for [*flagSet.PrintDefaults]
 		flagSet.PrintDefaults()
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set.")
@@ -78,16 +91,29 @@ func sessionCLI(ctx context.Context, args []string) int {
 		return 0
 	}
 
+	if *completionScriptShell != 0 {
+		if flagSet.NFlag() > 1 || flagSet.NArg() > 0 {
+			return usageErrorf("-completion-script flag must be provided on its own")
+		}
+		flagDescriptions := flagSet.CompletionDescriptions()
+		completionScript, err := completionScript(flagDescriptions, *completionScriptShell)
+		if err != nil {
+			return errorExit(err)
+		}
+		fmt.Print(completionScript)
+		return 0
+	}
+
 	templateName := flagSet.Arg(0)
 	if templateName == "" {
 		return usageErrorf("template name not provided")
 	}
 	sessionName := flagSet.Arg(1)
-	if args := flagSet.Args(); len(args) > 2 {
-		return usageErrorf("unexpected arguments: %s", strings.Join(args[2:], ", "))
+	if flagSet.NArg() > 2 {
+		return usageErrorf("unexpected arguments: %s", strings.Join(flagSet.Args()[2:], ", "))
 	}
 
-	configDir, err := xdgConfigHome()
+	userTemplatesDir, err := userTemplatesDir()
 	if err != nil {
 		return errorExit(err)
 	}
@@ -96,7 +122,7 @@ func sessionCLI(ctx context.Context, args []string) int {
 		return errorExit(err)
 	}
 	opts := runSessionOptions{
-		UserTemplatesDir: filepath.Join(configDir, "pg", "templates"),
+		UserTemplatesDir: userTemplatesDir,
 		PgPath:           pgPath,
 		TemplateName:     templateName,
 		SessionName:      sessionName,
@@ -110,20 +136,30 @@ func sessionCLI(ctx context.Context, args []string) int {
 	return 0
 }
 
+const subdirName = "pg" // Subdirectory name used when storing pg specific files in another directory
+
+func defaultSessionsDir() (string, error) {
+	dataDir, err := xdgDataHome()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dataDir, subdirName, "sessions"), nil
+}
+
+func userTemplatesDir() (string, error) {
+	configDir, err := xdgConfigHome()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, subdirName, "templates"), nil
+}
+
 func xdgDataHome() (string, error) {
 	return xdgDir("XDG_DATA_HOME", filepath.Join(".local", "share"))
 }
 
 func xdgConfigHome() (string, error) {
 	return xdgDir("XDG_CONFIG_HOME", ".config")
-}
-
-// stringFlagWithEnvVar returns a string flag which uses the given environment variable as a default
-// when set.
-func stringFlagWithEnvVar(fs *flag.FlagSet, name string, envVar string, defaultValue string, usage string) *string {
-	value := fs.String(name, "", fmt.Sprintf("%s (default %q) [$%s]", usage, defaultValue, envVar))
-	*value = cmp.Or(os.Getenv(envVar), defaultValue)
-	return value
 }
 
 func xdgDir(envVar string, homeSubDir string) (string, error) {
@@ -142,7 +178,7 @@ func xdgDir(envVar string, homeSubDir string) (string, error) {
 // It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
 func resultsCLI(ctx context.Context, args []string) int {
 	if len(args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: pg %s <session-dir> <entrypoint>\n", resultsCmd)
+		fmt.Fprintln(os.Stderr, "Usage: pg __results <session-dir> <entrypoint>")
 		return usageErrorExitCode
 	}
 	sessionDir := args[0]
@@ -150,6 +186,64 @@ func resultsCLI(ctx context.Context, args []string) int {
 	if err := printSessionResults(ctx, sessionDir, entrypoint); err != nil {
 		return errorExit(err)
 	}
+	return 0
+}
+
+// completeCLI parses the args for the complete command, prints the requested completions, reports
+// any errors, and returns an exit code.
+// It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
+func completeCLI(args []string) int {
+	flagSet := flag.NewFlagSet("__complete", flag.ExitOnError)
+	shell := new(shell)
+	flagSet.Var(shell, "shell", "Shell to generate completions for")
+	usage := func() {
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintln(os.Stderr, "    pg [-shell (bash|zsh|fish)] __complete templates")
+		fmt.Fprintln(os.Stderr, "    pg [-shell (bash|zsh|fish)] __complete sessions <template-name>")
+	}
+	usageError := func() int {
+		usage()
+		return usageErrorExitCode
+	}
+	flagSet.Usage = usage
+
+	flagSet.Parse(args) // nolint:errcheck // Parse will exit on any error
+
+	if flagSet.NArg() < 1 {
+		return usageError()
+	}
+
+	switch flagSet.Arg(0) {
+	case "templates":
+		if flagSet.NArg() != 1 {
+			return usageError()
+		}
+		userTemplatesDir, err := userTemplatesDir()
+		if err != nil {
+			return errorExit(err)
+		}
+		if err := completeTemplates(userTemplatesDir, *shell); err != nil {
+			return errorExit(err)
+		}
+
+	case "sessions":
+		if flagSet.NArg() != 2 {
+			return usageError()
+		}
+		templateName := flagSet.Arg(1)
+		defaultSessionsDir, err := defaultSessionsDir()
+		if err != nil {
+			return errorExit(err)
+		}
+		sessionsDir := cmp.Or(os.Getenv(sessionsDirEnvVar), defaultSessionsDir)
+		if err := completeSessions(templateName, sessionsDir, *shell); err != nil {
+			return errorExit(err)
+		}
+
+	default:
+		return usageError()
+	}
+
 	return 0
 }
 

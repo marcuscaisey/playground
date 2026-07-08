@@ -1,0 +1,158 @@
+#######################################
+# Adds words matching a prefix to the completion results
+# Globals:
+#     COMPREPLY
+# Arguments:
+#     $1: Prefix being matched
+#     $2...: Candidate words
+#######################################
+function _pg_complete_from_words() {
+    local prefix="$1"
+    local -a wordlist
+    printf -v wordlist '%q ' "${@:2}"
+    compgen -V COMPREPLY -W "$wordlist" -- "$prefix"
+}
+
+#######################################
+# Adds stdout lines matching a prefix from a command to the completion results
+# The command's stderr is discarded
+# Globals:
+#     COMPREPLY
+# Arguments:
+#     $1: Prefix being matched
+#     $2...: Command and arguments
+#######################################
+function _pg_complete_from_command() {
+    local prefix="$1"
+    local -a words
+    mapfile -t words < <("${@:2}" 2>/dev/null)
+    _pg_complete_from_words "$prefix" "${words[@]}"
+}
+
+#######################################
+# Lists names of executable files found on PATH
+# Globals:
+#     PATH
+# Outputs:
+#     Writes command names to stdout, one per line
+#######################################
+function _pg_path_commands() {
+    local dir command command_name
+    local -A seen
+    while IFS= read -r -d ':' dir; do
+        # A zero-length (null) directory name indicates the current directory
+        if [[ -z $dir ]]; then
+            dir=.
+        fi
+        if [[ ! -d $dir ]]; then
+            continue
+        fi
+        for command in "$dir"/*; do
+            if [[ ! -f $command || ! -x $command ]]; then
+                continue
+            fi
+            command_name=${command##*/}
+            if [[ -v 'seen[$command_name]' ]]; then
+                continue
+            fi
+            seen["$command_name"]=
+            printf '%s\n' "$command_name"
+        done
+    done < <(printf '%s:' "$PATH") # Suffix with : since read only reads : terminated lines
+}
+
+function _pg() {
+    local i word completion_mode preceding_word current_word previous_word command template
+    local -a positionals options
+    local -A used_flags
+
+    # Skip command name (COMP_WORDS[0]) and stop before current word (COMP_WORDS[COMP_CWORD])
+    for ((i = 1; i < COMP_CWORD; i++)); do
+        word=${COMP_WORDS[i]}
+        case $word in
+            -editor|-sessions-dir)
+                used_flags["$word"]=
+                completion_mode=${completion_mode:=normal}
+                ;;
+            -completion-script)
+                used_flags["$word"]=
+                completion_mode=${completion_mode:=completion_script}
+                ;;
+            -help)
+                used_flags["$word"]=
+                ;;
+            -*)
+                # Don't treat unknown options as positional arguments
+                ;;
+            *)
+                preceding_word=${COMP_WORDS[i-1]}
+                if [[ $preceding_word == @(-editor|-sessions-dir|-completion-script) ]]; then
+                    # This is an option value, not a positional argument
+                    continue
+                fi
+                positionals[${#positionals[@]}]=$word
+                completion_mode=${completion_mode:=normal}
+                ;;
+        esac
+    done
+
+    current_word=${COMP_WORDS[COMP_CWORD]}
+
+    # Options can only come before positional arguments
+    if [[ ${#positionals[@]} -eq 0 ]]; then
+        if ((COMP_CWORD > 0)); then
+            previous_word=${COMP_WORDS[COMP_CWORD-1]}
+        fi
+        case $previous_word in
+            -editor)
+                _pg_complete_from_command "$current_word" _pg_path_commands
+                return
+                ;;
+            -sessions-dir)
+                compopt -o dirnames
+                return
+                ;;
+            -completion-script)
+                _pg_complete_from_words "$current_word" {{.completion_script_shell_values}}
+                return
+                ;;
+        esac
+
+        if [[ $current_word == -* ]]; then
+            if [[ ! -v 'used_flags[-help]' ]]; then
+                options[${#options[@]}]=-help
+            fi
+            if [[ $completion_mode != completion_script ]]; then
+                if [[ ! -v 'used_flags[-editor]' ]]; then
+                    options[${#options[@]}]=-editor
+                fi
+                if [[ ! -v 'used_flags[-sessions-dir]' ]]; then
+                    options[${#options[@]}]=-sessions-dir
+                fi
+            fi
+            if [[ ! -v 'used_flags[-completion-script]' && $completion_mode != normal ]]; then
+                options[${#options[@]}]=-completion-script
+            fi
+            _pg_complete_from_words "$current_word" "${options[@]}"
+            return
+        fi
+    fi
+
+    # Positional arguments aren't allowed if -completion-script has been provided
+    if [[ $completion_mode == completion_script ]]; then
+        return
+    fi
+
+    command=${COMP_WORDS[0]}
+    case ${#positionals[@]} in
+        0)
+            _pg_complete_from_command "$current_word" "$command" __complete -shell bash templates
+            ;;
+        1)
+            template="${positionals[0]}"
+            _pg_complete_from_command "$current_word" "$command" __complete -shell bash sessions "$template"
+            ;;
+    esac
+}
+
+complete -o bashdefault -F _pg pg

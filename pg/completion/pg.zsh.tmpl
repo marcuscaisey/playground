@@ -1,0 +1,29 @@
+function _pg() {
+    local context state state_descr line curcontext="$curcontext" command template
+    local -a opt_args templates sessions
+    _arguments -C -A '-*' \
+            '-help[{{.help_description}}]' \
+        + normal \
+            '(completion-script)-editor=[{{.editor_description}}]:command:_path_commands' \
+            '(completion-script)-sessions-dir=[{{.sessions_dir_description}}]:sessions directory:_files -/' \
+            "(completion-script)1:template:->templates" \
+            "(completion-script)2:session:->sessions" \
+        + completion-script \
+            '(normal)-completion-script=[{{.completion_script_description}}]:shell:({{.completion_script_shell_values}})' \
+        && return
+
+    command=${words[1]}
+    case $state in
+        templates)
+            templates=("${(@f)$(_call_program templates $command __complete -shell zsh templates 2>/dev/null)}")
+            _describe -t templates $state_descr templates
+            ;;
+        sessions)
+            template=${line[1]}
+            sessions=("${(@f)$(_call_program sessions $command __complete -shell zsh sessions $template 2>/dev/null)}")
+            _describe -t sessions $state_descr sessions
+            ;;
+    esac
+}
+
+compdef _pg pg
