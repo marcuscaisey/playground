@@ -13,8 +13,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// printSessionResults watches a session directory for changes to the entrypoint, executing the
-// run script and printing the results when changes occur.
+// printSessionResults watches a session directory for changes to the entrypoint or run script,
+// executing the run script and printing the results when changes occur.
 func printSessionResults(ctx context.Context, sessionDir string, entrypoint string) (err error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -31,6 +31,7 @@ func printSessionResults(ctx context.Context, sessionDir string, entrypoint stri
 	}
 
 	entrypointPath := filepath.Join(sessionDir, entrypoint)
+	runScriptPath := filepath.Join(sessionDir, runScriptFilename)
 	var startTimerC <-chan time.Time
 	stopCurrentRun := func() {}
 	defer stopCurrentRun()
@@ -40,7 +41,7 @@ func printSessionResults(ctx context.Context, sessionDir string, entrypoint stri
 			if !ok {
 				return fmt.Errorf("printing session results: watcher events channel closed")
 			}
-			if event.Name != entrypointPath {
+			if event.Name != entrypointPath && event.Name != runScriptPath {
 				continue
 			}
 			if !event.Has(fsnotify.Write) && !event.Has(fsnotify.Create) {
