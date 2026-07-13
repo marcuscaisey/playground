@@ -57,7 +57,7 @@ func sessionCLI(ctx context.Context, args []string) int {
 	if err != nil {
 		return errorExit(err)
 	}
-	resultsPaneSize := flagSet.StringWithEnvVar("results-pane-size", "PG_RESULTS_PANE_SIZE", "50%", "Results pane `size` in lines, or as a percentage if followed by '%'\n")
+	resultsPaneSize := flagSet.StringWithEnvVar("results-pane-size", "PG_RESULTS_PANE_SIZE", "35%", "Results pane `size` in lines, or as a percentage if followed by '%'\n")
 	editor := flagSet.StringWithEnvVar("editor", "EDITOR", "vi", "Shell `command` to open editor")
 	sessionsDir := flagSet.StringWithEnvVar("sessions-dir", sessionsDirEnvVar, defaultSessionsDir, "Named sessions `directory`\n")
 	completionScriptShell := new(shell)
