@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -16,6 +17,7 @@ import (
 type runSessionOptions struct {
 	TemplateName     string // Template name.
 	SessionName      string // Session name; if empty, session is anonymous with generated name.
+	ResultsPaneSize  string // Number of lines, or a percentage if followed by %
 	Editor           string // Editor to open.
 	SessionsDir      string // Absolute path to sessions directory.
 	UserTemplatesDir string // Absolute path to user's templates directory.
@@ -36,6 +38,9 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		if err := validateSessionName(opts.SessionName); err != nil {
 			return fmt.Errorf("session name %q is invalid: %s", opts.SessionName, err)
 		}
+	}
+	if !regexp.MustCompile(`\d+%?`).MatchString(opts.ResultsPaneSize) {
+		return fmt.Errorf("results pane size must be a number, optionally followed by '%%'")
 	}
 
 	template, err := loadTemplate(opts.TemplateName, opts.UserTemplatesDir)
@@ -72,7 +77,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 
 	// See [resultsCLI] for the __results command
 	resultsPaneCmd := fmt.Sprintf("%s __results %s %s", shellQuote(opts.PgPath), shellQuote(sessionDir), shellQuote(template.Entrypoint))
-	resultsPaneID, err := runInNewTmuxPane(ctx, resultsPaneCmd)
+	resultsPaneID, err := runInNewTmuxPane(ctx, resultsPaneCmd, opts.ResultsPaneSize)
 	if err != nil {
 		if errors.Is(err, errTmuxNotFound) {
 			return fmt.Errorf("tmux not found in $PATH")
@@ -252,14 +257,15 @@ var errTmuxNotFound = fmt.Errorf("tmux not found in $PATH")
 
 // runInNewTmuxPane splits the current tmux pane vertically and runs a command in the new pane,
 // leaving the current pane selected.
+// size is passed as the -l option to tmux split-window.
 // The ID of the new pane is returned.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
-func runInNewTmuxPane(ctx context.Context, cmd string) (string, error) {
+func runInNewTmuxPane(ctx context.Context, cmd string, size string) (string, error) {
 	paneID, ok := os.LookupEnv("TMUX_PANE")
 	if !ok {
 		return "", fmt.Errorf("running command in new tmux pane: not currently in a tmux session")
 	}
-	newPaneID, err := tmux(ctx, "split-window", "-t", paneID, "-d", "-P", "-F", "#{pane_id}", cmd)
+	newPaneID, err := tmux(ctx, "split-window", "-t", paneID, "-d", "-l", size, "-P", "-F", "#{pane_id}", cmd)
 	if err != nil {
 		return "", fmt.Errorf("running command in new tmux pane: %w", err)
 	}

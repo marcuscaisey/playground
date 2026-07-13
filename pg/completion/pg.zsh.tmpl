@@ -4,6 +4,7 @@ function _pg() {
     _arguments -C -A '-*' \
             '-help[{{.help_description}}]' \
         + normal \
+            '(completion-script)-results-pane-size=[{{.results_pane_size_description}}]:size:' \
             '(completion-script)-editor=[{{.editor_description}}]:command:_path_commands' \
             '(completion-script)-sessions-dir=[{{.sessions_dir_description}}]:sessions directory:_files -/' \
             "(completion-script)1:template:->templates" \

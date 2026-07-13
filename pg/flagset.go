@@ -32,7 +32,11 @@ func newFlagSet(name string, errorHandling flag.ErrorHandling) *flagSet {
 // StringWithEnvVar is like [*flag.FlagSet.String] but uses the given environment variable as a
 // default value when set.
 func (fs *flagSet) StringWithEnvVar(name string, envVar string, value string, usage string) *string {
-	p := fs.String(name, "", fmt.Sprintf("%s (default %q) [$%s]", usage, value, envVar))
+	if usage[len(usage)-1] != '\n' {
+		usage += " "
+	}
+	usage += fmt.Sprintf("(default %q) [$%s]", value, envVar)
+	p := fs.String(name, "", usage)
 	*p = cmp.Or(os.Getenv(envVar), value)
 	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
 	fs.stringFlags[name] = true
@@ -149,13 +153,13 @@ func (fs *flagSet) CompletionDescriptions() map[string]string {
 }
 
 func lowerFirstLetter(s string) string {
-    firstLetter, size := utf8.DecodeRuneInString(s)
-    if firstLetter == utf8.RuneError && size <= 1 {
-        return s
-    }
-    firstLetterLower := unicode.ToLower(firstLetter)
-    if firstLetterLower == firstLetter {
-        return s
-    }
-    return string(firstLetterLower) + s[size:]
+	firstLetter, size := utf8.DecodeRuneInString(s)
+	if firstLetter == utf8.RuneError && size <= 1 {
+		return s
+	}
+	firstLetterLower := unicode.ToLower(firstLetter)
+	if firstLetterLower == firstLetter {
+		return s
+	}
+	return string(firstLetterLower) + s[size:]
 }

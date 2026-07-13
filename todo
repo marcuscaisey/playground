@@ -1,4 +1,3 @@
-* Make results pane smaller and configurable
 * Vertical split option
 * Add venv to python3 run.sh
 * Offer to save anonymous session after closing editor
