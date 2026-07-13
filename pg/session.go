@@ -70,6 +70,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: changing to session directory: %s", err)
 	}
 
+	// See [resultsCLI] for the __results command
 	resultsPaneCmd := fmt.Sprintf("%s __results %s %s", shellQuote(opts.PgPath), shellQuote(sessionDir), shellQuote(template.Entrypoint))
 	resultsPaneID, err := runInNewTmuxPane(ctx, resultsPaneCmd)
 	if err != nil {
@@ -85,6 +86,9 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 			err = errors.Join(err, fmt.Errorf("running session: closing results pane: %s", closeErr))
 		}
 	}()
+	if err := disableTmuxPaneInput(ctx, resultsPaneID); err != nil {
+		return fmt.Errorf("running session: configuring results pane: %s", err)
+	}
 
 	// FIXME: This fails when editor contains args like "nvim -n".
 	editorCmd := exec.CommandContext(ctx, opts.Editor, template.Entrypoint)
@@ -254,11 +258,24 @@ func runInNewTmuxPane(ctx context.Context, cmd string) (string, error) {
 	return newPaneID, nil
 }
 
-// killTmuxPane kills a tmux pane.
+// killTmuxPane kills the given tmux pane.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
 func killTmuxPane(ctx context.Context, id string) error {
 	_, err := tmux(ctx, "kill-pane", "-t", id)
+	if err != nil {
+		return fmt.Errorf("killing tmux pane: %w", err)
+	}
 	return err
+}
+
+// disableTmuxPaneInput disables input to the given tmux pane.
+// If tmux is not found, the returned error wraps [errTmuxNotFound].
+func disableTmuxPaneInput(ctx context.Context, id string) error {
+	_, err := tmux(ctx, "select-pane", "-t", id, "-d")
+	if err != nil {
+		return fmt.Errorf("disabling tmux pane input: %w", err)
+	}
+	return nil
 }
 
 // tmux runs a tmux command and returns its output.

@@ -1,12 +1,11 @@
-* Protect results pane from being closed (should still be able to select it though)
 * Should it be possible to accept input from stdin in the results pane?
+* Don't report results pane closing error when pane missing?
 * Make results pane smaller and configurable
 * Vertical split option
 * Add venv to python3 run.sh
 * Offer to save anonymous session after closing editor
 * Start new tmux session if not already in one
 * Move cursor to specific line in entrypoint (see hsandbox <cursor>)
-* Don't report results pane closing error when pane missing?
 * Include descriptions for zsh and fish completions where it makes sense
 * Decide on file extension for shell templates
 * Include hints to install missing dependencies in error messages
