@@ -89,6 +89,14 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	if err := disableTmuxPaneInput(ctx, resultsPaneID); err != nil {
 		return fmt.Errorf("running session: configuring results pane: %s", err)
 	}
+	// Keeps the results pane open if the results command exits with a non-zero code
+	if err := setTmuxPaneOption(ctx, resultsPaneID, "remain-on-exit", "failed"); err != nil {
+		return fmt.Errorf("running session: configuring results pane: %s", err)
+	}
+	resultsExitMsg := fmt.Sprintf(`playground: results command has exited unexpectedly. Restart it with "tmux respawn-pane -t %s".`, resultsPaneID)
+	if err := setTmuxPaneOption(ctx, resultsPaneID, "remain-on-exit-format", resultsExitMsg); err != nil {
+		return fmt.Errorf("running session: configuring results pane: %s", err)
+	}
 
 	// FIXME: This fails when editor contains args like "nvim -n".
 	editorCmd := exec.CommandContext(ctx, opts.Editor, template.Entrypoint)
@@ -274,6 +282,16 @@ func disableTmuxPaneInput(ctx context.Context, id string) error {
 	_, err := tmux(ctx, "select-pane", "-t", id, "-d")
 	if err != nil {
 		return fmt.Errorf("disabling tmux pane input: %w", err)
+	}
+	return nil
+}
+
+// setTmuxPaneOption sets an option in a tmux pane.
+// If tmux is not found, the returned error wraps [errTmuxNotFound].
+func setTmuxPaneOption(ctx context.Context, id string, option string, value string) error {
+	_, err := tmux(ctx, "set-option", "-p", "-t", id, option, value)
+	if err != nil {
+		return fmt.Errorf("setting tmux pane option: %w", err)
 	}
 	return nil
 }

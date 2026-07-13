@@ -1,4 +1,3 @@
-* Should it be possible to accept input from stdin in the results pane?
 * Don't report results pane closing error when pane missing?
 * Make results pane smaller and configurable
 * Vertical split option
