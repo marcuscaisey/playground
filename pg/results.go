@@ -16,6 +16,12 @@ import (
 // printSessionResults watches a session directory for changes to the entrypoint or run script,
 // executing the run script and printing the results when changes occur.
 func printSessionResults(ctx context.Context, sessionDir string, entrypoint string) (err error) {
+	// Ensure that commands which rely on the current directory (like tmux split-window -c
+	// "#{pane_current_path}") work as expected.
+	if err := os.Chdir(sessionDir); err != nil {
+		return fmt.Errorf("printing session results: changing to session directory: %s", err)
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("printing session results: %s", err)

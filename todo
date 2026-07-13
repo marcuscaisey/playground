@@ -1,4 +1,3 @@
-* Make split from editor pane open in session directory
 * Protect results pane from being closed (should still be able to select it though)
 * Should it be possible to accept input from stdin in the results pane?
 * Make results pane smaller and configurable

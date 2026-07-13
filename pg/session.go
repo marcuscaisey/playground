@@ -64,6 +64,12 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: %s", err)
 	}
 
+	// Ensure that commands which rely on the current directory (like tmux split-window -c
+	// "#{pane_current_path}") work as expected.
+	if err := os.Chdir(sessionDir); err != nil {
+		return fmt.Errorf("running session: changing to session directory: %s", err)
+	}
+
 	resultsPaneCmd := fmt.Sprintf("%s __results %s %s", shellQuote(opts.PgPath), shellQuote(sessionDir), shellQuote(template.Entrypoint))
 	closeResultsPane, err := runInNewTmuxPane(ctx, resultsPaneCmd)
 	if err != nil {
