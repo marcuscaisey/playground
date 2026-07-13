@@ -82,7 +82,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	defer func() {
 		// We don't propagate the context through this call since we want it to run even if our
 		// context got cancelled.
-		if closeErr := killTmuxPane(context.Background(), resultsPaneID); closeErr != nil {
+		if closeErr := killTmuxPane(context.Background(), resultsPaneID); closeErr != nil && !errors.Is(closeErr, errTmuxPaneNotFound) {
 			err = errors.Join(err, fmt.Errorf("running session: closing results pane: %s", closeErr))
 		}
 	}()
@@ -266,11 +266,17 @@ func runInNewTmuxPane(ctx context.Context, cmd string) (string, error) {
 	return newPaneID, nil
 }
 
+var errTmuxPaneNotFound = fmt.Errorf("tmux pane not found")
+
 // killTmuxPane kills the given tmux pane.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
+// If the pane is not found, the returned error wraps [errTmuxPaneNotFound].
 func killTmuxPane(ctx context.Context, id string) error {
 	_, err := tmux(ctx, "kill-pane", "-t", id)
 	if err != nil {
+		if strings.Contains(err.Error(), "can't find pane") {
+			return fmt.Errorf("killing tmux pane %q: %w", id, errTmuxPaneNotFound)
+		}
 		return fmt.Errorf("killing tmux pane: %w", err)
 	}
 	return err
@@ -303,7 +309,7 @@ func tmux(ctx context.Context, args ...string) (string, error) {
 	output, err := tmuxCmd.Output()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return "", fmt.Errorf("running %s: %w", tmuxCmd, errTmuxNotFound)
+			return "", fmt.Errorf("executing %s: %w", tmuxCmd, errTmuxNotFound)
 		}
 		return "", fmt.Errorf("executing %q: %s", tmuxCmd, cmdErrMsg(err))
 	}
