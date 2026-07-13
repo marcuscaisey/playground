@@ -20,6 +20,7 @@ func main() {
 // cli parses its args, runs one of the session, complete, or results commands, and returns the
 // corresponding exit code.
 func cli(args []string) int {
+	// SIGUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	if len(args) > 1 && args[1] == "__results" {

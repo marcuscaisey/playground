@@ -71,15 +71,17 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	}
 
 	resultsPaneCmd := fmt.Sprintf("%s __results %s %s", shellQuote(opts.PgPath), shellQuote(sessionDir), shellQuote(template.Entrypoint))
-	closeResultsPane, err := runInNewTmuxPane(ctx, resultsPaneCmd)
+	resultsPaneID, err := runInNewTmuxPane(ctx, resultsPaneCmd)
 	if err != nil {
 		if errors.Is(err, errTmuxNotFound) {
 			return fmt.Errorf("tmux not found in $PATH")
 		}
-		return fmt.Errorf("running session: %s", err)
+		return fmt.Errorf("running session: creating results pane: %s", err)
 	}
 	defer func() {
-		if closeErr := closeResultsPane(); closeErr != nil {
+		// We don't propagate the context through this call since we want it to run even if our
+		// context got cancelled.
+		if closeErr := killTmuxPane(context.Background(), resultsPaneID); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("running session: closing results pane: %s", closeErr))
 		}
 	}()
@@ -238,32 +240,39 @@ var errTmuxNotFound = fmt.Errorf("tmux not found in $PATH")
 
 // runInNewTmuxPane splits the current tmux pane vertically and runs a command in the new pane,
 // leaving the current pane selected.
-// The returned function closes the new pane.
-func runInNewTmuxPane(ctx context.Context, cmd string) (func() error, error) {
+// The ID of the new pane is returned.
+// If tmux is not found, the returned error wraps [errTmuxNotFound].
+func runInNewTmuxPane(ctx context.Context, cmd string) (string, error) {
 	paneID, ok := os.LookupEnv("TMUX_PANE")
 	if !ok {
-		return nil, fmt.Errorf("running %q in new tmux pane: not currently in a tmux session", cmd)
+		return "", fmt.Errorf("running command in new tmux pane: not currently in a tmux session")
 	}
+	newPaneID, err := tmux(ctx, "split-window", "-t", paneID, "-d", "-P", "-F", "#{pane_id}", cmd)
+	if err != nil {
+		return "", fmt.Errorf("running command in new tmux pane: %w", err)
+	}
+	return newPaneID, nil
+}
 
-	tmuxCmd := exec.CommandContext(ctx, "tmux", "split-window", "-t", paneID, "-d", "-P", "-F", "#{pane_id}", cmd)
+// killTmuxPane kills a tmux pane.
+// If tmux is not found, the returned error wraps [errTmuxNotFound].
+func killTmuxPane(ctx context.Context, id string) error {
+	_, err := tmux(ctx, "kill-pane", "-t", id)
+	return err
+}
+
+// tmux runs a tmux command and returns its output.
+// If tmux is not found, the returned error wraps [errTmuxNotFound].
+func tmux(ctx context.Context, args ...string) (string, error) {
+	tmuxCmd := exec.CommandContext(ctx, "tmux", args...)
 	output, err := tmuxCmd.Output()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return nil, fmt.Errorf("running %q in new tmux pane: %w", cmd, errTmuxNotFound)
+			return "", fmt.Errorf("running %s: %w", tmuxCmd, errTmuxNotFound)
 		}
-		return nil, fmt.Errorf("running %q in new tmux pane: splitting tmux window: %s", cmd, cmdErrMsg(err))
+		return "", fmt.Errorf("executing %q: %s", tmuxCmd, cmdErrMsg(err))
 	}
-	newPaneID := strings.TrimSpace(string(output))
-
-	return func() error {
-		// We don't propagate the context to this command since we want it to run even if the
-		// context gets cancelled.
-		cmd := exec.Command("tmux", "kill-pane", "-t", newPaneID)
-		if _, err := cmd.Output(); err != nil {
-			return fmt.Errorf("killing tmux pane %q: %s", newPaneID, cmdErrMsg(err))
-		}
-		return nil
-	}, nil
+	return strings.TrimSpace(string(output)), nil
 }
 
 // cmdErrMsg returns the appropriate error message for an [error] returned by [exec.Cmd.Output].
