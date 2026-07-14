@@ -17,6 +17,7 @@ import (
 type runSessionOptions struct {
 	TemplateName     string // Template name.
 	SessionName      string // Session name; if empty, session is anonymous with generated name.
+	Vertical         bool   // Whether to split the window vertically
 	ResultsPaneSize  string // Number of lines, or a percentage if followed by %
 	Editor           string // Editor to open.
 	SessionsDir      string // Absolute path to sessions directory.
@@ -77,7 +78,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 
 	// See [resultsCLI] for the __results command
 	resultsPaneCmd := fmt.Sprintf("%s __results %s %s", shellQuote(opts.PgPath), shellQuote(sessionDir), shellQuote(template.Entrypoint))
-	resultsPaneID, err := runInNewTmuxPane(ctx, resultsPaneCmd, opts.ResultsPaneSize)
+	resultsPaneID, err := tmuxSplitPane(ctx, resultsPaneCmd, opts.Vertical, opts.ResultsPaneSize)
 	if err != nil {
 		if errors.Is(err, errTmuxNotFound) {
 			return fmt.Errorf("tmux not found in $PATH")
@@ -255,17 +256,24 @@ func setupSessionDir(dir string, template template) error {
 
 var errTmuxNotFound = fmt.Errorf("tmux not found in $PATH")
 
-// runInNewTmuxPane splits the current tmux pane vertically and runs a command in the new pane,
-// leaving the current pane selected.
+// tmuxSplitPane splits the current tmux pane and runs a command in the new pane, leaving the
+// current pane selected.
 // size is passed as the -l option to tmux split-window.
 // The ID of the new pane is returned.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
-func runInNewTmuxPane(ctx context.Context, cmd string, size string) (string, error) {
+func tmuxSplitPane(ctx context.Context, cmd string, vertical bool, size string) (string, error) {
 	paneID, ok := os.LookupEnv("TMUX_PANE")
 	if !ok {
 		return "", fmt.Errorf("running command in new tmux pane: not currently in a tmux session")
 	}
-	newPaneID, err := tmux(ctx, "split-window", "-t", paneID, "-d", "-l", size, "-P", "-F", "#{pane_id}", cmd)
+	// The split-window flags direction flags aren't the way around you'd expect. -v means the panes
+	// will stacked vertically (what you'd expect is horizontal) and -h means they'll be
+	// side-by=side (what you'd expect)
+	directionFlag := "-v"
+	if vertical {
+		directionFlag = "-h"
+	}
+	newPaneID, err := tmux(ctx, "split-window", "-t", paneID, "-d", directionFlag, "-l", size, "-P", "-F", "#{pane_id}", cmd)
 	if err != nil {
 		return "", fmt.Errorf("running command in new tmux pane: %w", err)
 	}

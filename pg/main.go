@@ -57,6 +57,7 @@ func sessionCLI(ctx context.Context, args []string) int {
 	if err != nil {
 		return errorExit(err)
 	}
+	vertical := flagSet.Bool("vertical", false, "Split the window vertically instead of horizontally")
 	resultsPaneSize := flagSet.StringWithEnvVar("results-pane-size", "PG_RESULTS_PANE_SIZE", "35%", "Results pane `size` in lines, or as a percentage if followed by '%'\n")
 	editor := flagSet.StringWithEnvVar("editor", "EDITOR", "vi", "Shell `command` to open editor")
 	sessionsDir := flagSet.StringWithEnvVar("sessions-dir", sessionsDirEnvVar, defaultSessionsDir, "Named sessions `directory`\n")
@@ -126,6 +127,7 @@ Example usage:
 	opts := runSessionOptions{
 		TemplateName:     templateName,
 		SessionName:      sessionName,
+		Vertical:         *vertical,
 		ResultsPaneSize:  *resultsPaneSize,
 		Editor:           *editor,
 		SessionsDir:      *sessionsDir,

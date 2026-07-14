@@ -70,7 +70,7 @@ function _pg() {
     for ((i = 1; i < COMP_CWORD; i++)); do
         word=${COMP_WORDS[i]}
         case $word in
-            -results-pane-size|-editor|-sessions-dir)
+            -vertical|-results-pane-size|-editor|-sessions-dir)
                 used_flags["$word"]=
                 completion_mode=${completion_mode:=normal}
                 ;;
@@ -126,6 +126,9 @@ function _pg() {
                 options[${#options[@]}]=-help
             fi
             if [[ $completion_mode != completion_script ]]; then
+                if [[ ! -v 'used_flags[-vertical]' ]]; then
+                    options[${#options[@]}]=-vertical
+                fi
                 if [[ ! -v 'used_flags[-results-pane-size]' ]]; then
                     options[${#options[@]}]=-results-pane-size
                 fi
