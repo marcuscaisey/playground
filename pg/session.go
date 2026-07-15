@@ -68,7 +68,11 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		sessionDir, err = ensureNamedSessionDir(opts.SessionName, absSessionsDir, template)
 	} else {
 		sessionDir, err = setupAnonSessionDir(template)
-		defer os.RemoveAll(sessionDir) // nolint:errcheck // It's fine if this fails as it's a temporary directory
+		defer func() {
+			if err == nil {
+				os.RemoveAll(sessionDir) // nolint:errcheck // It's fine if this fails as it's a temporary directory
+			}
+		}()
 	}
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
