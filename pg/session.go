@@ -20,7 +20,7 @@ type runSessionOptions struct {
 	Vertical         bool   // Whether to split the window vertically
 	ResultsPaneSize  string // Number of lines, or a percentage if followed by %
 	Editor           string // Editor to open.
-	SessionsDir      string // Absolute path to sessions directory.
+	SessionsDir      string // Path to sessions directory.
 	UserTemplatesDir string // Absolute path to user's templates directory.
 	PgPath           string // Absolute path to pg executable; used to start the results command.
 }
@@ -59,9 +59,13 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: %s", err)
 	}
 
+	absSessionsDir, err := filepath.Abs(opts.SessionsDir)
+	if err != nil {
+		return fmt.Errorf("running session: %s", err)
+	}
 	var sessionDir string
 	if opts.SessionName != "" {
-		sessionDir, err = ensureNamedSessionDir(opts.SessionName, opts.SessionsDir, template)
+		sessionDir, err = ensureNamedSessionDir(opts.SessionName, absSessionsDir, template)
 	} else {
 		sessionDir, err = setupAnonSessionDir(template)
 		defer os.RemoveAll(sessionDir) // nolint:errcheck // It's fine if this fails as it's a temporary directory
