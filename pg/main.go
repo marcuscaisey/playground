@@ -125,14 +125,15 @@ Example usage:
 		return errorExit(err)
 	}
 	opts := runSessionOptions{
-		TemplateName:     templateName,
-		SessionName:      sessionName,
-		Vertical:         *vertical,
-		ResultsPaneSize:  *resultsPaneSize,
-		Editor:           *editor,
-		SessionsDir:      *sessionsDir,
-		UserTemplatesDir: userTemplatesDir,
-		PgPath:           pgPath,
+		TemplateName:         templateName,
+		SessionName:          sessionName,
+		Vertical:             *vertical,
+		ResultsPaneSize:      *resultsPaneSize,
+		Editor:               *editor,
+		SessionsDir:          *sessionsDir,
+		SessionsDirIsDefault: *sessionsDir == defaultSessionsDir,
+		UserTemplatesDir:     userTemplatesDir,
+		PgPath:               pgPath,
 	}
 	if err := runSession(ctx, opts); err != nil {
 		return errorExit(err)

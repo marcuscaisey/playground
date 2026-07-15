@@ -1,4 +1,3 @@
-* Offer to save anonymous session after closing editor
 * Start new tmux session if not already in one
 * Move cursor to specific line in entrypoint (see hsandbox <cursor>)
 * Include descriptions for zsh and fish completions where it makes sense

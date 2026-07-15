@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -15,14 +16,15 @@ import (
 )
 
 type runSessionOptions struct {
-	TemplateName     string // Template name.
-	SessionName      string // Session name; if empty, session is anonymous with generated name.
-	Vertical         bool   // Whether to split the window vertically
-	ResultsPaneSize  string // Number of lines, or a percentage if followed by %
-	Editor           string // Editor to open.
-	SessionsDir      string // Path to sessions directory.
-	UserTemplatesDir string // Absolute path to user's templates directory.
-	PgPath           string // Absolute path to pg executable; used to start the results command.
+	TemplateName         string // Template name
+	SessionName          string // Session name; if empty, session is anonymous with generated name
+	Vertical             bool   // Whether to split the window vertically
+	ResultsPaneSize      string // Number of lines, or a percentage if followed by %
+	Editor               string // Shell command to open editor
+	SessionsDir          string // Path to sessions directory
+	SessionsDirIsDefault bool   // Whether the sessions directory is the default
+	UserTemplatesDir     string // Absolute path to user's templates directory
+	PgPath               string // Absolute path to pg executable; used to start the results command
 }
 
 // runSession runs a session using the given template.
@@ -31,6 +33,8 @@ type runSessionOptions struct {
 // If the session is named, then its directory is set up in the sessions directory, named after the
 // session. Otherwise, the session is anonymous and its directory is set up in a temporary directory
 // with a generated name.
+// If the session is anonymous and the editor exits successfully, the user is prompted to save their
+// session as a named session. If they confirm, then the session is moved to the sessions directory.
 func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	if err := validateDirNameSafe(opts.TemplateName); err != nil {
 		return fmt.Errorf("template name %q is invalid: %s", opts.TemplateName, err)
@@ -100,6 +104,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 			err = errors.Join(err, fmt.Errorf("running session: closing results pane: %s", closeErr))
 		}
 	}()
+	// Protect the user from accidentally killing the process with Ctrl-C
 	if err := disableTmuxPaneInput(ctx, resultsPaneID); err != nil {
 		return fmt.Errorf("running session: configuring results pane: %s", err)
 	}
@@ -122,8 +127,56 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		if errors.Is(err, exec.ErrNotFound) {
 			return fmt.Errorf("editor %q not found in $PATH", opts.Editor)
 		}
-		// TODO: make this error message more user friendly
-		return fmt.Errorf("running session with editor %q: %s", opts.Editor, cmdErrMsg(err))
+		// This is expected behaviour when the user doesn't want to be prompted to save their
+		// anonymous session. Also, if there is an actual error, it should be logged out by the
+		// editor anyway.
+		return nil
+	}
+
+	if opts.SessionName != "" {
+		return nil
+	}
+	// nolint:errcheck // We still want to save the user's session if this fails and we're going to
+	// try killing the pane again when we exit this function anyway (where the error will also be
+	// recorded).
+	killTmuxPane(ctx, resultsPaneID)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("Enter a name to save this session (or Ctrl-D to abort): ")
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("saving session: reading line from stdin: %s", err)
+			}
+			return nil
+		}
+		sessionName := scanner.Text()
+		if sessionName == "" {
+			continue
+		}
+
+		newSessionDir := namedSessionDir(sessionName, absSessionsDir, template.Name)
+		if err := os.MkdirAll(filepath.Dir(newSessionDir), 0755); err != nil {
+			return fmt.Errorf("saving session: %s", err)
+		}
+		if err := os.Rename(sessionDir, newSessionDir); err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				fmt.Printf("A %q session named %q already exists:\n", template.Name, sessionName)
+				fmt.Printf("  %s\n", newSessionDir)
+				continue
+			}
+			return fmt.Errorf("saving session: %s", err)
+		}
+
+		fmt.Printf("Saved %q session %q to:\n", template.Name, sessionName)
+		fmt.Printf("  %s\n", newSessionDir)
+		fmt.Printf("To resume, run:\n")
+		sessionsDirFlag := ""
+		if !opts.SessionsDirIsDefault {
+			sessionsDirFlag = fmt.Sprintf("-sessions-dir %s ", shellQuote(opts.SessionsDir))
+		}
+		fmt.Printf("  pg %s%s %s\n", sessionsDirFlag, shellQuote(template.Name), shellQuote(sessionName))
+		break
 	}
 
 	return nil
@@ -156,7 +209,12 @@ func validateSessionName(name string) error {
 }
 
 // shellQuote returns arg quoted so that it can be used as a literal shell command argument.
+// If arg consists entirely of "safe" characters, then it's returned unchanged.
 func shellQuote(arg string) string {
+	safeCharsRe := regexp.MustCompile(`^[\w\-./]+$`)
+	if safeCharsRe.MatchString(arg) {
+		return arg
+	}
 	return fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", `'\''`))
 }
 
@@ -165,8 +223,7 @@ const namedSessionStagingDirPrefix = ".pg-tmp"
 // ensureNamedSessionDir sets up a named session directory in the sessions directory if it doesn't
 // already exist and returns the directory name.
 func ensureNamedSessionDir(sessionName string, sessionsDir string, template template) (string, error) {
-	templateSessionsDir := templateSessionsDir(sessionsDir, template.Name)
-	sessionDir := filepath.Join(templateSessionsDir, sessionName)
+	sessionDir := namedSessionDir(sessionName, sessionsDir, template.Name)
 	if ok, err := fileExists(sessionDir); err != nil {
 		return "", fmt.Errorf("setting up session directory: %s", err)
 	} else if ok {
@@ -200,6 +257,12 @@ func ensureNamedSessionDir(sessionName string, sessionsDir string, template temp
 	}
 
 	return sessionDir, nil
+}
+
+// namedSessionDir returns the directory where a named session is stored.
+func namedSessionDir(sessionName string, sessionsDir string, templateName string) string {
+	templateSessionsDir := templateSessionsDir(sessionsDir, templateName)
+	return filepath.Join(templateSessionsDir, sessionName)
 }
 
 // templateSessionsDir returns the directory where named sessions for the given template are stored.
