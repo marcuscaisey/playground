@@ -11,9 +11,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
+
+// The args that will be used if [runSessionOptions.Editor] exactly matches one of the keys
+var defaultEditorArgs = map[string]string{
+	"nvim":  "+{start_line} +normal$",
+	"vim":   "+{start_line} +normal$",
+	"vi":    "+{start_line} +normal$",
+	"nano":  "+{start_line}",
+	"pico":  "+{start_line}",
+	"emacs": "+{start_line}:999",
+}
 
 type runSessionOptions struct {
 	TemplateName         string // Template name
@@ -45,7 +56,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		}
 	}
 	if !regexp.MustCompile(`\d+%?`).MatchString(opts.ResultsPaneSize) {
-		return fmt.Errorf("results pane size must be a number, optionally followed by '%%'")
+		return fmt.Errorf("results pane size is invalid: must be a number, optionally followed by '%%'")
 	}
 
 	template, err := loadTemplate(opts.TemplateName, opts.UserTemplatesDir)
@@ -68,11 +79,14 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: %s", err)
 	}
 	var sessionDir string
+	sessionIsNew := true
 	if opts.SessionName != "" {
-		sessionDir, err = ensureNamedSessionDir(opts.SessionName, absSessionsDir, template)
+		sessionDir, sessionIsNew, err = ensureNamedSessionDir(opts.SessionName, absSessionsDir, template)
 	} else {
 		sessionDir, err = setupAnonSessionDir(template)
 		defer func() {
+			// Keep the directory around if there's an error to allow the user to recover the
+			// contents of the session
 			if err == nil {
 				os.RemoveAll(sessionDir) // nolint:errcheck // It's fine if this fails as it's a temporary directory
 			}
@@ -120,12 +134,22 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: configuring results pane: %s", err)
 	}
 
-	// FIXME: This fails when editor contains args like "nvim -n".
-	editorCmd := cmdWithStdio(ctx, opts.Editor, template.Entrypoint)
+	editor := strings.TrimSpace(opts.Editor)
+	if args := defaultEditorArgs[editor]; args != "" {
+		editor += " " + args
+	}
+	const startLinePlaceholder = "{start_line}"
+	if sessionIsNew && strings.Contains(editor, startLinePlaceholder) {
+		editor = strings.ReplaceAll(editor, startLinePlaceholder, strconv.Itoa(template.EntrypointStartLine))
+	}
+	editorName, editorArgsString, _ := strings.Cut(editor, " ")
+	editorArgs := strings.Fields(editorArgsString)
+	editorArgs = append(editorArgs, template.Entrypoint)
+	editorCmd := cmdWithStdio(ctx, editorName, editorArgs...)
 	editorCmd.Dir = sessionDir
 	if err := editorCmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return fmt.Errorf("editor %q not found in $PATH", opts.Editor)
+			return fmt.Errorf("editor %q not found in $PATH", editorName)
 		}
 		// This is expected behaviour when the user doesn't want to be prompted to save their
 		// anonymous session. Also, if there is an actual error, it should be logged out by the
@@ -148,6 +172,8 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 			if err := scanner.Err(); err != nil {
 				return fmt.Errorf("saving session: reading line from stdin: %s", err)
 			}
+			fmt.Println()
+			fmt.Println("Exit the editor with a non-zero exit code to skip this prompt in the future")
 			return nil
 		}
 		sessionName := scanner.Text()
@@ -221,13 +247,13 @@ func shellQuote(arg string) string {
 const namedSessionStagingDirPrefix = ".pg-tmp"
 
 // ensureNamedSessionDir sets up a named session directory in the sessions directory if it doesn't
-// already exist and returns the directory name.
-func ensureNamedSessionDir(sessionName string, sessionsDir string, template template) (string, error) {
-	sessionDir := namedSessionDir(sessionName, sessionsDir, template.Name)
+// already exist. It returns the directory name and whether it was created by this call.
+func ensureNamedSessionDir(sessionName string, sessionsDir string, template template) (sessionDir string, created bool, err error) {
+	sessionDir = namedSessionDir(sessionName, sessionsDir, template.Name)
 	if ok, err := fileExists(sessionDir); err != nil {
-		return "", fmt.Errorf("setting up session directory: %s", err)
+		return "", false, fmt.Errorf("setting up session directory: %s", err)
 	} else if ok {
-		return sessionDir, nil
+		return sessionDir, false, nil
 	}
 
 	// We set up the session in a temporary staging directory first and then move it into place.
@@ -235,28 +261,28 @@ func ensureNamedSessionDir(sessionName string, sessionsDir string, template temp
 	// get used by future sessions.
 	sessionDirParent := filepath.Dir(sessionDir)
 	if err := os.MkdirAll(sessionDirParent, 0755); err != nil {
-		return "", fmt.Errorf("setting up session directory: %s", err)
+		return "", false, fmt.Errorf("setting up session directory: %s", err)
 	}
 	stagingDirNamePattern := fmt.Sprintf("%s-*", namedSessionStagingDirPrefix)
 	stagingDir, err := os.MkdirTemp(sessionDirParent, stagingDirNamePattern)
 	if err != nil {
-		return "", fmt.Errorf("setting up session directory: creating staging directory: %s", err)
+		return "", false, fmt.Errorf("setting up session directory: creating staging directory: %s", err)
 	}
 	defer os.RemoveAll(stagingDir) // nolint:errcheck // It's fine if this fails as it's a hidden directory
-	if err := setupSessionDir(stagingDir, template); err != nil {
-		return "", err
+	if err := template.SetupSessionDir(stagingDir); err != nil {
+		return "", false, err
 	}
 	if err := os.Rename(stagingDir, sessionDir); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			// If the directory already exists, there must have been a racing process trying to
 			// create the same session. We can just behave as if the directory had already existed
 			// when we checked and ignore the error.
-			return sessionDir, nil
+			return sessionDir, false, nil
 		}
-		return "", fmt.Errorf("setting up session directory: moving into place: %s", err)
+		return "", false, fmt.Errorf("setting up session directory: moving into place: %s", err)
 	}
 
-	return sessionDir, nil
+	return sessionDir, true, nil
 }
 
 // namedSessionDir returns the directory where a named session is stored.
@@ -300,29 +326,10 @@ func setupAnonSessionDir(template template) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("setting up session directory: %s", err)
 	}
-	if err := setupSessionDir(sessionDir, template); err != nil {
+	if err := template.SetupSessionDir(sessionDir); err != nil {
 		return "", err
 	}
 	return sessionDir, nil
-}
-
-// setupSessionDir copies a template's files into a session directory.
-func setupSessionDir(dir string, template template) error {
-	if err := os.CopyFS(dir, template.FS); err != nil {
-		return fmt.Errorf("setting up session directory: %s", err)
-	}
-	// From the [embed] docs: "Patterns must not match files outside the package's module, such as
-	// ‘.git/*’, symbolic links, 'vendor/', or any directories containing go.mod (these are separate
-	// modules).". This prevents us from including a go.mod file in the built-in Go template
-	// directory so we just write one to the session directory ourselves.
-	if template.Name == "go" && template.IsBuiltin {
-		path := filepath.Join(dir, "go.mod")
-		data := []byte("module playground\n")
-		if err := os.WriteFile(path, data, 0o666); err != nil {
-			return fmt.Errorf("setting up session directory: writing built-in go template go.mod: %s", err)
-		}
-	}
-	return nil
 }
 
 // tmuxSplitPane splits the current tmux pane and runs a command in the new pane, leaving the
