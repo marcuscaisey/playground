@@ -22,7 +22,7 @@ type runSessionOptions struct {
 	ResultsPaneSize      string // Number of lines, or a percentage if followed by %
 	Editor               string // Shell command to open editor
 	SessionsDir          string // Path to sessions directory
-	SessionsDirIsDefault bool   // Whether the sessions directory is the default
+	SessionsDirIsDefault bool   // Whether the sessions directory is the default; used when printing example commands
 	UserTemplatesDir     string // Absolute path to user's templates directory
 	PgPath               string // Absolute path to pg executable; used to start the results command
 }
@@ -95,6 +95,9 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		if errors.Is(err, errTmuxNotFound) {
 			return fmt.Errorf("tmux not found in $PATH")
 		}
+		if errors.Is(err, errNotInTmuxSession) {
+			return fmt.Errorf("not in a tmux session")
+		}
 		return fmt.Errorf("running session: creating results pane: %s", err)
 	}
 	defer func() {
@@ -118,11 +121,8 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	}
 
 	// FIXME: This fails when editor contains args like "nvim -n".
-	editorCmd := exec.CommandContext(ctx, opts.Editor, template.Entrypoint)
+	editorCmd := cmdWithStdio(ctx, opts.Editor, template.Entrypoint)
 	editorCmd.Dir = sessionDir
-	editorCmd.Stdin = os.Stdin
-	editorCmd.Stdout = os.Stdout
-	editorCmd.Stderr = os.Stderr
 	if err := editorCmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return fmt.Errorf("editor %q not found in $PATH", opts.Editor)
@@ -325,18 +325,13 @@ func setupSessionDir(dir string, template template) error {
 	return nil
 }
 
-var errTmuxNotFound = fmt.Errorf("tmux not found in $PATH")
-
 // tmuxSplitPane splits the current tmux pane and runs a command in the new pane, leaving the
 // current pane selected.
 // size is passed as the -l option to tmux split-window.
 // The ID of the new pane is returned.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
+// If not in a tmux session, the returned error wraps [errNotInTmuxSession].
 func tmuxSplitPane(ctx context.Context, cmd string, vertical bool, size string) (string, error) {
-	paneID, ok := os.LookupEnv("TMUX_PANE")
-	if !ok {
-		return "", fmt.Errorf("running command in new tmux pane: not currently in a tmux session")
-	}
 	// The split-window flags direction flags aren't the way around you'd expect. -v means the panes
 	// will stacked vertically (what you'd expect is horizontal) and -h means they'll be
 	// side-by=side (what you'd expect)
@@ -344,6 +339,7 @@ func tmuxSplitPane(ctx context.Context, cmd string, vertical bool, size string) 
 	if vertical {
 		directionFlag = "-h"
 	}
+	paneID := os.Getenv("TMUX_PANE")
 	newPaneID, err := tmux(ctx, "split-window", "-t", paneID, "-d", directionFlag, "-l", size, "-P", "-F", "#{pane_id}", cmd)
 	if err != nil {
 		return "", fmt.Errorf("running command in new tmux pane: %w", err)
@@ -355,6 +351,7 @@ var errTmuxPaneNotFound = fmt.Errorf("tmux pane not found")
 
 // killTmuxPane kills the given tmux pane.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
+// If not in a tmux session, the returned error wraps [errNotInTmuxSession].
 // If the pane is not found, the returned error wraps [errTmuxPaneNotFound].
 func killTmuxPane(ctx context.Context, id string) error {
 	_, err := tmux(ctx, "kill-pane", "-t", id)
@@ -369,6 +366,7 @@ func killTmuxPane(ctx context.Context, id string) error {
 
 // disableTmuxPaneInput disables input to the given tmux pane.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
+// If not in a tmux session, the returned error wraps [errNotInTmuxSession].
 func disableTmuxPaneInput(ctx context.Context, id string) error {
 	_, err := tmux(ctx, "select-pane", "-t", id, "-d")
 	if err != nil {
@@ -379,6 +377,7 @@ func disableTmuxPaneInput(ctx context.Context, id string) error {
 
 // setTmuxPaneOption sets an option in a tmux pane.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
+// If not in a tmux session, the returned error wraps [errNotInTmuxSession].
 func setTmuxPaneOption(ctx context.Context, id string, option string, value string) error {
 	_, err := tmux(ctx, "set-option", "-p", "-t", id, option, value)
 	if err != nil {
@@ -387,18 +386,37 @@ func setTmuxPaneOption(ctx context.Context, id string, option string, value stri
 	return nil
 }
 
+var (
+	errTmuxNotFound     = fmt.Errorf("tmux not found in $PATH")
+	errNotInTmuxSession = fmt.Errorf("not in a tmux session")
+)
+
 // tmux runs a tmux command and returns its output.
 // If tmux is not found, the returned error wraps [errTmuxNotFound].
+// If not in a tmux session, the returned error wraps [errNotInTmuxSession].
 func tmux(ctx context.Context, args ...string) (string, error) {
 	tmuxCmd := exec.CommandContext(ctx, "tmux", args...)
+	if _, ok := os.LookupEnv("TMUX"); !ok {
+		return "", fmt.Errorf("executing %q: %w", tmuxCmd, errNotInTmuxSession)
+	}
 	output, err := tmuxCmd.Output()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return "", fmt.Errorf("executing %s: %w", tmuxCmd, errTmuxNotFound)
+			return "", fmt.Errorf("executing %q: %w", tmuxCmd, errTmuxNotFound)
 		}
 		return "", fmt.Errorf("executing %q: %s", tmuxCmd, cmdErrMsg(err))
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+// cmdWithStdio returns an [*exec.Cmd] which uses the standard input, ouput, and error of the
+// current process.
+func cmdWithStdio(ctx context.Context, cmd string, args ...string) *exec.Cmd {
+	command := exec.CommandContext(ctx, cmd, args...)
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	return command
 }
 
 // cmdErrMsg returns the appropriate error message for an [error] returned by [exec.Cmd.Output].
