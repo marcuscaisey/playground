@@ -17,18 +17,22 @@ func main() {
 	os.Exit(cli(os.Args))
 }
 
+const (
+	resultsSubcmd  = "__results"
+)
+
 // cli parses its args, runs one of the session, complete, or results commands, and returns the
 // corresponding exit code.
 func cli(args []string) int {
 	// SIGUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	if len(args) > 1 && args[1] == "__results" {
-		return resultsCLI(ctx, args[2:]) // Drop program name and command.
+	if len(args) > 1 && args[1] == resultsSubcmd {
+		return resultsCLI(ctx, args[2:]) // Drop program name and command
 	} else if len(args) > 1 && args[1] == "__complete" {
-		return completeCLI(args[2:]) // Drop program name and command.
+		return completeCLI(args[2:]) // Drop program name and command
 	} else {
-		return sessionCLI(ctx, args[1:]) // Drop program name.
+		return sessionCLI(ctx, args[1:]) // Drop program name
 	}
 }
 

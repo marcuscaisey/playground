@@ -102,8 +102,8 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: changing to session directory: %s", err)
 	}
 
-	// See [resultsCLI] for the __results command
-	resultsPaneCmd := fmt.Sprintf("%s __results %s %s", shellQuote(opts.PgPath), shellQuote(sessionDir), shellQuote(template.Entrypoint))
+	// See [resultsCLI] for the results subcommand
+	resultsPaneCmd := fmt.Sprintf("%s %s %s %s", shellQuote(opts.PgPath), resultsSubcmd, shellQuote(sessionDir), shellQuote(template.Entrypoint))
 	resultsPaneID, err := tmuxSplitPane(ctx, resultsPaneCmd, opts.Vertical, opts.ResultsPaneSize)
 	if err != nil {
 		if errors.Is(err, errTmuxNotFound) {

@@ -1,4 +1,5 @@
-* Add constants for __complete and __results
+* Validate session name when saving anonymous session
+* Don't auto-complete space for missing sessions
 * Refactor some big functions?
 * Use go build in go template
 * Stop passing entrypoint to run.sh
