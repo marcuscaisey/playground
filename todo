@@ -1,6 +1,6 @@
-* Don't auto-complete space for missing sessions
 * Refactor some big functions?
 * Use go build in go template
+* Add more whitespace to -help output?
 * Stop passing entrypoint to run.sh
 * Include descriptions for zsh and fish completions where it makes sense
 * Decide on file extension for shell templates

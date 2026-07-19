@@ -17,12 +17,12 @@ function _pg() {
     command=${words[1]}
     case $state in
         templates)
-            templates=("${(@f)$(_call_program templates $command __complete -shell zsh templates 2>/dev/null)}")
+            templates=(${(f)"$(_call_program templates $command __complete -shell zsh templates 2>/dev/null)"})
             _describe -t templates $state_descr templates
             ;;
         sessions)
             template=${line[1]}
-            sessions=("${(@f)$(_call_program sessions $command __complete -shell zsh sessions $template 2>/dev/null)}")
+            sessions=(${(f)"$(_call_program sessions $command __complete -shell zsh sessions $template 2>/dev/null)"})
             _describe -t sessions $state_descr sessions
             ;;
     esac

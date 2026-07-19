@@ -8,8 +8,13 @@
 #######################################
 function _pg_complete_from_words() {
     local prefix="$1"
-    local -a wordlist
-    printf -v wordlist '%q ' "${@:2}"
+    local -a wordlist words
+    words=("${@:2}")
+    if (( ${#words[@]} == 0 )); then
+        COMPREPLY=()
+        return
+    fi
+    printf -v wordlist '%q ' "${words[@]}"
     compgen -V COMPREPLY -W "$wordlist" -- "$prefix"
 }
 

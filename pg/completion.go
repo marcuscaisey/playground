@@ -109,8 +109,10 @@ func completionScript(flagDescriptions map[string]string, shell shell) (string, 
 }
 
 // completeTemplates prints all available template names, one per line.
-// When zsh is true, the template names are escaped so that the output can be safely used with the
-// _describe zsh function.
+// When shell is zsh, the template names are escaped so that the output can be safely used with the
+// zsh _describe function.
+// When shell is fish, the template names are escaped so that the output can be safely used with the
+// fish complete function.
 func completeTemplates(userTemplatesDir string, shell shell) error {
 	names, err := listTemplateNames(userTemplatesDir)
 	if err != nil {
@@ -121,8 +123,10 @@ func completeTemplates(userTemplatesDir string, shell shell) error {
 }
 
 // completeSessions prints all session names for a given template, one per line.
-// When zsh is true, the template names are escaped so that the output can be safely used with the
-// _describe zsh function.
+// When shell is zsh, the template names are escaped so that the output can be safely used with the
+// zsh _describe function.
+// When shell is fish, the template names are escaped so that the output can be safely used with the
+// fish complete function.
 func completeSessions(templateName string, sessionsDir string, shell shell) error {
 	names, err := listSessionNames(templateName, sessionsDir)
 	if err != nil {
