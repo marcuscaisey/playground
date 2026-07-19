@@ -16,16 +16,6 @@ import (
 	"unicode"
 )
 
-// The args that will be used if [runSessionOptions.Editor] exactly matches one of the keys
-var defaultEditorArgs = map[string]string{
-	"nvim":  "+{start_line} +normal$",
-	"vim":   "+{start_line} +normal$",
-	"vi":    "+{start_line} +normal$",
-	"nano":  "+{start_line}",
-	"pico":  "+{start_line}",
-	"emacs": "+{start_line}:999",
-}
-
 type runSessionOptions struct {
 	TemplateName         string // Template name
 	SessionName          string // Session name; if empty, session is anonymous with generated name
@@ -36,6 +26,20 @@ type runSessionOptions struct {
 	SessionsDirIsDefault bool   // Whether the sessions directory is the default; used when printing example commands
 	UserTemplatesDir     string // Absolute path to user's templates directory
 	PgPath               string // Absolute path to pg executable; used to start the results command
+}
+
+// Placeholder in [runSessionOptions.Editor] which is replaced with the line where the template's
+// entrypoint should be opened
+const startLinePlaceholder = "{start_line}"
+
+// The args that will be used if [runSessionOptions.Editor] exactly matches one of the keys
+var defaultEditorArgs = map[string]string{
+	"nvim":  fmt.Sprintf("+%s +normal$", startLinePlaceholder),
+	"vim":   fmt.Sprintf("+%s +normal$", startLinePlaceholder),
+	"vi":    fmt.Sprintf("+%s +normal$", startLinePlaceholder),
+	"nano":  fmt.Sprintf("+%s", startLinePlaceholder),
+	"pico":  fmt.Sprintf("+%s", startLinePlaceholder),
+	"emacs": fmt.Sprintf("+%s:999", startLinePlaceholder),
 }
 
 // runSession runs a session using the given template.
@@ -135,11 +139,10 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	}
 
 	editor := strings.TrimSpace(opts.Editor)
-	if args := defaultEditorArgs[editor]; args != "" {
-		editor += " " + args
-	}
-	const startLinePlaceholder = "{start_line}"
 	if sessionIsNew && strings.Contains(editor, startLinePlaceholder) {
+		if args := defaultEditorArgs[editor]; args != "" {
+			editor += " " + args
+		}
 		editor = strings.ReplaceAll(editor, startLinePlaceholder, strconv.Itoa(template.EntrypointStartLine))
 	}
 	editorName, editorArgsString, _ := strings.Cut(editor, " ")
