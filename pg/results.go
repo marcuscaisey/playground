@@ -98,7 +98,7 @@ func startRunScript(ctx context.Context, sessionDir string, entrypoint string) (
 
 	fmt.Print(ansiClearScreen)
 	fmt.Print(ansiMoveCursorHome)
-	styledPrintf(ansiBoldGreen, "Executing %q\n\n", cmd.String())
+	styledPrintf(ansiBoldGreen, "Executing %s\n\n", cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("executing %q in %q: %s", entrypoint, sessionDir, err)
 	}
