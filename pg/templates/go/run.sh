@@ -1,1 +1,1 @@
-go run "$1"
+go build -o main main.go && ./main
