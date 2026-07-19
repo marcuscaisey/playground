@@ -52,11 +52,11 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	}
 	if opts.SessionName != "" {
 		if err := validateSessionName(opts.SessionName); err != nil {
-			return fmt.Errorf("session name %q is invalid: %s", opts.SessionName, err)
+			return err
 		}
 	}
 	if !regexp.MustCompile(`\d+%?`).MatchString(opts.ResultsPaneSize) {
-		return fmt.Errorf("results pane size is invalid: must be a number, optionally followed by '%%'")
+		return fmt.Errorf("results pane size %q is invalid: must be a number, optionally followed by '%%'", opts.ResultsPaneSize)
 	}
 
 	template, err := loadTemplate(opts.TemplateName, opts.UserTemplatesDir)
@@ -180,6 +180,10 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		if sessionName == "" {
 			continue
 		}
+		if err := validateSessionName(sessionName); err != nil {
+			fmt.Println(err)
+			continue
+		}
 
 		newSessionDir := namedSessionDir(sessionName, absSessionsDir, template.Name)
 		if err := os.MkdirAll(filepath.Dir(newSessionDir), 0755); err != nil {
@@ -227,11 +231,16 @@ func validateDirNameSafe(name string) error {
 	return nil
 }
 
+// validateSessionName validates that a session name is safe to use as a single directory path
+// element and doesn't use the prefix .pg-tmp reserved for temporary staging directories.
 func validateSessionName(name string) error {
 	if strings.HasPrefix(name, namedSessionStagingDirPrefix) {
-		return fmt.Errorf("cannot use reserved prefix %q", namedSessionStagingDirPrefix)
+		return fmt.Errorf("session name %q is invalid: cannot use reserved prefix %q", name, namedSessionStagingDirPrefix)
 	}
-	return validateDirNameSafe(name)
+	if err := validateDirNameSafe(name); err != nil {
+		return fmt.Errorf("session name %q is invalid: %s", name, err)
+	}
+	return nil
 }
 
 // shellQuote returns arg quoted so that it can be used as a literal shell command argument.
