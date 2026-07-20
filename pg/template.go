@@ -191,8 +191,8 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 
 // templateInfo describes an available template.
 type templateInfo struct {
-	Name      string
-	IsBuiltin bool
+	Name      string // Template name
+	IsBuiltin bool   // Whether the template is built-in
 }
 
 // listTemplates returns all distinct built-in and user templates.

@@ -1,3 +1,4 @@
+* Replace errcheck ignore comments with _ = err suppression
 * Include descriptions for zsh and fish completions where it makes sense
 * Include hints to install missing dependencies in error messages
 * Error for missing bash

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -99,6 +100,9 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: %s", err)
 	}
 
+	// Best effort as the last opened time is only depended upon during tab completion
+	_ = updateSessionLastOpened(sessionDir)
+
 	// Ensure that commands which rely on the current directory (like tmux split-window -c
 	// "#{pane_current_path}") work as expected.
 	if err := os.Chdir(sessionDir); err != nil {
@@ -177,7 +181,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 				return fmt.Errorf("saving session: reading line from stdin: %s", err)
 			}
 			fmt.Println()
-			fmt.Println("Exit the editor with a non-zero exit code to skip this prompt")
+			fmt.Println("Exit editor with a non-zero exit code to skip this prompt")
 			return nil
 		}
 		sessionName := scanner.Text()
@@ -309,22 +313,35 @@ func templateSessionsDir(sessionsDir string, templateName string) string {
 	return filepath.Join(sessionsDir, templateName)
 }
 
-// listSessionNames returns the names of all sessions using the given template in alphabetical
-// order.
-func listSessionNames(templateName string, sessionsDir string) ([]string, error) {
+// sessionInfo describes an available session.
+type sessionInfo struct {
+	Name       string    // Session name
+	LastOpened time.Time // Last time session was opened; zero value if unknown
+}
+
+// listSessions returns all sessions using the given template.
+func listSessions(templateName string, sessionsDir string) ([]sessionInfo, error) {
 	templateSessionsDir := templateSessionsDir(sessionsDir, templateName)
 	sessionDirs, err := os.ReadDir(templateSessionsDir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("listing sessions names: reading %q template sessions directory: %s", templateName, err)
+		return nil, fmt.Errorf("listing sessions: reading %q template sessions directory: %s", templateName, err)
 	}
-	var names []string
-	for _, dirEntry := range sessionDirs {
-		if strings.HasPrefix(dirEntry.Name(), namedSessionStagingDirPrefix) {
+	var sessions []sessionInfo
+	for _, dir := range sessionDirs {
+		name := dir.Name()
+		if strings.HasPrefix(name, namedSessionStagingDirPrefix) {
 			continue
 		}
-		names = append(names, dirEntry.Name())
+		var lastOpened time.Time
+		lastOpenedPath := filepath.Join(templateSessionsDir, name, sessionLastOpenedFilename)
+		// The file may have been removed by the user, this is fine
+		if info, err := os.Stat(lastOpenedPath); err == nil {
+			lastOpened = info.ModTime()
+		}
+		session := sessionInfo{Name: name, LastOpened: lastOpened}
+		sessions = append(sessions, session)
 	}
-	return names, nil
+	return sessions, nil
 }
 
 // setupAnonSessionDir sets up an anonymous session directory in a temporary directory and returns
@@ -343,6 +360,17 @@ func setupAnonSessionDir(template template) (string, error) {
 		return "", err
 	}
 	return sessionDir, nil
+}
+
+const sessionLastOpenedFilename = ".pg-last-opened"
+
+// updateSessionLastOpened updates the session's last opened time.
+// This is stored as the modification time of the .pg-last-opened file in the session directory.
+func updateSessionLastOpened(sessionDir string) error {
+	if err := os.WriteFile(filepath.Join(sessionDir, sessionLastOpenedFilename), nil, 0o666); err != nil {
+		return fmt.Errorf("updating session last opened: %s", err)
+	}
+	return nil
 }
 
 // tmuxSplitPane splits the current tmux pane and runs a command in the new pane, leaving the
