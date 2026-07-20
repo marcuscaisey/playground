@@ -92,15 +92,15 @@ func (fs *flagSet) PrintDefaults() {
 				fmt.Fprintf(&b, " (default %v)", f.DefValue)
 			}
 		}
-		fmt.Fprint(fs.Output(), b.String(), "\n") // nolint:errcheck
+		_, _ = fmt.Fprint(fs.Output(), b.String(), "\n")
 	}
 	// If calling String on any zero flag.Values triggered a panic, print
 	// the messages after the full set of defaults so that the programmer
 	// knows to fix the panic.
 	if errs := isZeroValueErrs; len(errs) > 0 {
-		fmt.Fprintln(fs.Output()) // nolint:errcheck
+		_, _ = fmt.Fprintln(fs.Output())
 		for _, err := range errs {
-			fmt.Fprintln(fs.Output(), err) // nolint:errcheck
+			_, _ = fmt.Fprintln(fs.Output(), err)
 		}
 	}
 }

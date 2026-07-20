@@ -220,7 +220,7 @@ func completeCLI(args []string) int {
 	}
 	flagSet.Usage = usage
 
-	flagSet.Parse(args) // nolint:errcheck // Parse will exit on any error
+	_ = flagSet.Parse(args) // Parse will exit on any error
 
 	if flagSet.NArg() < 1 {
 		return usageError()

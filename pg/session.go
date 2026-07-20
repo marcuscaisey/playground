@@ -92,7 +92,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 			// Keep the directory around if there's an error to allow the user to recover the
 			// contents of the session
 			if err == nil {
-				os.RemoveAll(sessionDir) // nolint:errcheck // It's fine if this fails as it's a temporary directory
+				_ = os.RemoveAll(sessionDir) // It's fine if this fails as it's a temporary directory
 			}
 		}()
 	}
@@ -168,10 +168,9 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	if opts.SessionName != "" {
 		return nil
 	}
-	// nolint:errcheck // We still want to save the user's session if this fails and we're going to
-	// try killing the pane again when we exit this function anyway (where the error will also be
-	// recorded).
-	killTmuxPane(ctx, resultsPaneID)
+	// We still want to save the user's session if this fails and we're going to try killing the
+	// pane again when we exit this function anyway (where the error will also be recorded).
+	_ = killTmuxPane(ctx, resultsPaneID)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {

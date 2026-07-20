@@ -1,10 +1,11 @@
-* Replace errcheck ignore comments with _ = err suppression
 * Include hints to install missing dependencies in error messages
 * Error for missing bash
 * Refactor some big functions?
+* Disable staticheck / errcheck / etc in gopls, use golangcilint instead
 * Decide when to show full / partial help text
 * Add more documentation to -help output?
 * Add -version flag
+* Add more languages
 * README
     * Motiviation
     * Demo
