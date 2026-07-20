@@ -34,7 +34,7 @@ const runScriptFilename = "run.sh"
 //     whitespace) are erased when the template is copied into the session directory and, if
 //     possible, the cursor is placed on it when the entrypoint is opened for the first time. All
 //     __CURSOR__ appearances after the first one are ignored.
-//   - A "run.sh" file, the run script executed as "bash run.sh $entrypoint"
+//   - A "run.sh" file, the run script executed as "bash run.sh"
 //   - Any other files needed to run the session
 type template struct {
 	Name                string // Template name; matches the template directory name

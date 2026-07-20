@@ -1,1 +1,1 @@
-fish "$1"
+fish main.fish

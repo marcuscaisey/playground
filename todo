@@ -1,6 +1,4 @@
 * Refactor some big functions?
-* Add more whitespace to -help output?
-* Stop passing entrypoint to run.sh
 * Include descriptions for zsh and fish completions where it makes sense
 * Include hints to install missing dependencies in error messages
 * Error for missing bash

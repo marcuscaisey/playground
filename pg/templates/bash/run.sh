@@ -1,1 +1,1 @@
-bash "$1"
+bash main.bash

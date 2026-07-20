@@ -59,7 +59,7 @@ func printSessionResults(ctx context.Context, sessionDir string, entrypoint stri
 
 		case <-startTimerC:
 			stopCurrentRun()
-			stopCurrentRun, err = startRunScript(ctx, sessionDir, entrypoint)
+			stopCurrentRun, err = startRunScript(ctx, sessionDir)
 			if err != nil {
 				return fmt.Errorf("printing session results: %s", err)
 			}
@@ -77,10 +77,10 @@ func printSessionResults(ctx context.Context, sessionDir string, entrypoint stri
 }
 
 // startRunScript starts execution of a session's run script and returns a function to stop it.
-// The run script is executed as "bash run.sh $entrypoint" from the session directory.
+// The run script is executed as "bash run.sh" from the session directory.
 // The returned function blocks until execution has been stopped and is safe to be called after
 // execution has stopped.
-func startRunScript(ctx context.Context, sessionDir string, entrypoint string) (stop func(), err error) {
+func startRunScript(ctx context.Context, sessionDir string) (stop func(), err error) {
 	cmdCtx, cancelCmdCtx := context.WithCancel(ctx)
 	defer func() {
 		if err != nil {
@@ -88,7 +88,7 @@ func startRunScript(ctx context.Context, sessionDir string, entrypoint string) (
 		}
 	}()
 
-	cmd := cmdWithStdio(cmdCtx, "bash", runScriptFilename, entrypoint)
+	cmd := cmdWithStdio(cmdCtx, "bash", runScriptFilename)
 	cmd.Dir = sessionDir
 	// Run bash in a process group so that we can kill it and any child processes spawned by run.sh.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -100,7 +100,7 @@ func startRunScript(ctx context.Context, sessionDir string, entrypoint string) (
 	fmt.Print(ansiMoveCursorHome)
 	styledPrintf(ansiBoldGreen, "Executing %s\n\n", cmd)
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("executing %q in %q: %s", entrypoint, sessionDir, err)
+		return nil, fmt.Errorf("executing %q in %q: %s", cmd, sessionDir, err)
 	}
 
 	done := make(chan struct{})

@@ -1,1 +1,1 @@
-go build -o main main.go && ./main
+go build -o main . && ./main
