@@ -28,18 +28,15 @@ type runSessionOptions struct {
 	PgPath               string // Absolute path to pg executable; used to start the results command
 }
 
-// Placeholder in [runSessionOptions.Editor] which is replaced with the line where the template's
-// entrypoint should be opened
-const startLinePlaceholder = "{start_line}"
-
-// The args that will be used if [runSessionOptions.Editor] exactly matches one of the keys
-var defaultEditorArgs = map[string]string{
-	"nvim":  fmt.Sprintf("+%s +normal$", startLinePlaceholder),
-	"vim":   fmt.Sprintf("+%s +normal$", startLinePlaceholder),
-	"vi":    fmt.Sprintf("+%s +normal$", startLinePlaceholder),
-	"nano":  fmt.Sprintf("+%s", startLinePlaceholder),
-	"pico":  fmt.Sprintf("+%s", startLinePlaceholder),
-	"emacs": fmt.Sprintf("+%s:999", startLinePlaceholder),
+// Extra arguments passed to each editor when a new session is started.
+// {start_line} is replaced with the line where the template's entrypoint should be opened.
+var editorNewSessionExtraArgs = map[string]string{
+	"nvim":  "+{start_line} +normal$",
+	"vim":   "+{start_line} +normal$",
+	"vi":    "+{start_line} +normal$",
+	"nano":  "+{start_line}",
+	"pico":  "+{start_line}",
+	"emacs": "+{start_line}:999",
 }
 
 // runSession runs a session using the given template.
@@ -139,20 +136,22 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	}
 
 	editor := strings.TrimSpace(opts.Editor)
-	if sessionIsNew && strings.Contains(editor, startLinePlaceholder) {
-		if args := defaultEditorArgs[editor]; args != "" {
-			editor += " " + args
-		}
-		editor = strings.ReplaceAll(editor, startLinePlaceholder, strconv.Itoa(template.EntrypointStartLine))
-	}
-	editorName, editorArgsString, _ := strings.Cut(editor, " ")
+	editorCmdName, editorArgsString, _ := strings.Cut(editor, " ")
 	editorArgs := strings.Fields(editorArgsString)
+	if sessionIsNew {
+		editorName := filepath.Base(editorCmdName) // editorCmdName could be an absolute path
+		if format := editorNewSessionExtraArgs[editorName]; format != "" {
+			extraArgsString := strings.ReplaceAll(format, "{start_line}", strconv.Itoa(template.EntrypointStartLine))
+			extraArgs := strings.Fields(extraArgsString)
+			editorArgs = append(editorArgs, extraArgs...)
+		}
+	}
 	editorArgs = append(editorArgs, template.Entrypoint)
-	editorCmd := cmdWithStdio(ctx, editorName, editorArgs...)
+	editorCmd := cmdWithStdio(ctx, editorCmdName, editorArgs...)
 	editorCmd.Dir = sessionDir
 	if err := editorCmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return fmt.Errorf("editor %q not found in $PATH", editorName)
+			return fmt.Errorf("editor %q not found in $PATH", editorCmdName)
 		}
 		// This is expected behaviour when the user doesn't want to be prompted to save their
 		// anonymous session. Also, if there is an actual error, it should be logged out by the

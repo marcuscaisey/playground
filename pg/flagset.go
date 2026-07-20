@@ -29,24 +29,15 @@ func newFlagSet(name string, errorHandling flag.ErrorHandling) *flagSet {
 	}
 }
 
-// StringWithEnvVar is like [*flag.FlagSet.String] but uses the given environment variables as
-// default values when set. The order of the given environment variables determines their precedence
-// (earlier ones have higher precedence).
-func (fs *flagSet) StringWithEnvVars(name string, envVars []string, value string, usage string) *string {
-	envVarsWithDollars := make([]string, len(envVars))
-	defaultValue := ""
-	for i, envVar := range envVars {
-		envVarsWithDollars[i] = fmt.Sprintf("$%s", envVar)
-		defaultValue = cmp.Or(defaultValue, os.Getenv(envVar))
-	}
-	defaultValue = cmp.Or(defaultValue, value)
-
+// StringWithEnvVar is like [*flag.FlagSet.String] but uses the given environment variable as a
+// default value when set.
+func (fs *flagSet) StringWithEnvVar(name string, envVar string, value string, usage string) *string {
 	if usage[len(usage)-1] != '\n' {
 		usage += " "
 	}
-	usage += fmt.Sprintf("(default %q) [%s]", value, strings.Join(envVarsWithDollars, ", "))
+	usage += fmt.Sprintf("(default %q) [$%s]", value, envVar)
 	p := fs.String(name, "", usage)
-	*p = defaultValue
+	*p = cmp.Or(os.Getenv(envVar), value)
 	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
 	fs.stringFlags[name] = true
 	return p
