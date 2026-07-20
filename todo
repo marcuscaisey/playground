@@ -1,7 +1,7 @@
-* Refactor some big functions?
 * Include descriptions for zsh and fish completions where it makes sense
 * Include hints to install missing dependencies in error messages
 * Error for missing bash
+* Refactor some big functions?
 * Decide when to show full / partial help text
 * Add more documentation to -help output?
 * Add -version flag
@@ -11,4 +11,4 @@
     * Mention https://labix.org/hsandbox as inspiration
     * Dependencies -- bash, tmux
     * No windows support
-* Build binary for all platforms
+* Build binary for all platforms (GoReleaser?)

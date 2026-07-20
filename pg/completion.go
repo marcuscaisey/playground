@@ -1,8 +1,10 @@
 package main
 
 import (
+	"cmp"
 	_ "embed"
 	"fmt"
+	"slices"
 	"strings"
 	texttemplate "text/template"
 )
@@ -108,25 +110,60 @@ func completionScript(flagDescriptions map[string]string, shell shell) (string, 
 	return b.String(), nil
 }
 
+// completion represents a text snippet proposed to complete text being typed.
+type completion struct {
+	Value       string // Proposed text snippet; always shown
+	Description string // Description of snippet; only shown for supporting shells
+}
+
+// Format formats the completion for the given shell.
+// For zsh, the format is that expected by the zshcompsys _describe command name1 argument.
+// For fish, the format is that expected by the complete command --arguments flag.
+// For other shell, the value is returned unchanged.
+func (c completion) Format(shell shell) string {
+	switch shell {
+	case shellZsh:
+		value := strings.ReplaceAll(c.Value, ":", `\:`)
+		// Empty description results in an empty description shown. No description results in no
+		// description shown.
+		if c.Description != "" {
+			return value + ":" + c.Description
+		} else {
+			return value
+		}
+	case shellFish:
+		value := strings.ReplaceAll(c.Value, "\t", strings.Repeat(" ", 4))
+		return value + "\t" + c.Description
+	default:
+		return c.Value
+	}
+}
+
 // completeTemplates prints all available template names, one per line.
-// When shell is zsh, the template names are escaped so that the output can be safely used with the
-// zsh _describe function.
-// When shell is fish, the template names are escaped so that the output can be safely used with the
-// fish complete function.
+// For zsh, the format is that expected by the zshcompsys _describe command name1 argument.
+// For fish, the format is that expected by the complete command --arguments flag.
 func completeTemplates(userTemplatesDir string, shell shell) error {
-	names, err := listTemplateNames(userTemplatesDir)
+	templates, err := listTemplates(userTemplatesDir)
 	if err != nil {
 		return fmt.Errorf("completing templates: %s", err)
 	}
-	printCompletions(names, shell)
+	slices.SortFunc(templates, func(a templateInfo, b templateInfo) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	for _, template := range templates {
+		description := "user"
+		if template.IsBuiltin {
+			description = "built-in"
+		}
+		completion := completion{Value: template.Name, Description: description}
+		fmt.Println(completion.Format(shell))
+	}
 	return nil
 }
 
 // completeSessions prints all session names for a given template, one per line.
-// When shell is zsh, the template names are escaped so that the output can be safely used with the
-// zsh _describe function.
-// When shell is fish, the template names are escaped so that the output can be safely used with the
-// fish complete function.
+// For zsh, the format is that expected by the zshcompsys _describe command name1 argument.
+// For fish, the format is that expected by the complete command --arguments flag.
 func completeSessions(templateName string, sessionsDir string, shell shell) error {
 	names, err := listSessionNames(templateName, sessionsDir)
 	if err != nil {

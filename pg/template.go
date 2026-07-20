@@ -189,25 +189,31 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	}, nil
 }
 
-// listTemplateNames returns all distinct built-in and user template names in alphabetical order.
-func listTemplateNames(userTemplatesDir string) ([]string, error) {
-	uniqueNames := map[string]bool{}
+// templateInfo describes an available template.
+type templateInfo struct {
+	Name      string
+	IsBuiltin bool
+}
+
+// listTemplates returns all distinct built-in and user templates.
+func listTemplates(userTemplatesDir string) ([]templateInfo, error) {
+	templates := map[string]templateInfo{}
 
 	builtinTemplateDirs, err := fs.ReadDir(builtinTemplatesFS, builtinTemplatesDirName)
 	if err != nil {
-		return nil, fmt.Errorf("listing template names: reading built-in templates: %s", err)
+		return nil, fmt.Errorf("listing templates: reading built-in templates: %s", err)
 	}
 	for _, dirEntry := range builtinTemplateDirs {
-		uniqueNames[dirEntry.Name()] = true
+		templates[dirEntry.Name()] = templateInfo{Name: dirEntry.Name(), IsBuiltin: true}
 	}
 
 	userTemplateDirs, err := os.ReadDir(userTemplatesDir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("listing template names: reading user templates: %s", err)
+		return nil, fmt.Errorf("listing templates: reading user templates: %s", err)
 	}
 	for _, dirEntry := range userTemplateDirs {
-		uniqueNames[dirEntry.Name()] = true
+		templates[dirEntry.Name()] = templateInfo{Name: dirEntry.Name(), IsBuiltin: false}
 	}
 
-	return slices.Sorted(maps.Keys(uniqueNames)), nil
+	return slices.Collect(maps.Values(templates)), nil
 }
