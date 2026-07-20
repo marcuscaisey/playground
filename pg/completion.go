@@ -119,9 +119,6 @@ func completeTemplates(userTemplatesDir string, shell shell) error {
 	if err != nil {
 		return fmt.Errorf("completing templates: %s", err)
 	}
-	slices.SortFunc(templates, func(a templateInfo, b templateInfo) int {
-		return cmp.Compare(a.Name, b.Name)
-	})
 	for _, template := range templates {
 		description := "user"
 		if template.IsBuiltin {
@@ -132,7 +129,8 @@ func completeTemplates(userTemplatesDir string, shell shell) error {
 	return nil
 }
 
-// completeSessions prints all session names for a given template, one per line.
+// completeSessions prints all session names for a given template in descending last opened order,
+// one per line.
 // For zsh, the format is that expected by the zshcompsys _describe command name1 argument.
 // For fish, the format is that expected by the complete command --arguments flag.
 func completeSessions(templateName string, sessionsDir string, shell shell) error {

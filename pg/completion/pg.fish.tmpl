@@ -65,7 +65,8 @@ complete --command pg \
     --arguments '(__pg __complete -shell fish templates)'
 complete --command pg \
     --condition "__pg_is_nth_argument 2 && $completion_script_flags_not_seen" \
-    --arguments '(__pg __complete -shell fish sessions (__pg_previous_token))'
+    --arguments '(__pg __complete -shell fish sessions (__pg_previous_token))' \
+    --keep-order
 
 set --local normal_flags_not_seen 'not __fish_seen_argument --old vertical --old results-pane-size --old editor --old sessions-dir'
 complete --command pg \

@@ -1,3 +1,9 @@
+# pg __complete sessions already sorts its output
+zstyle ':completion:*:*:pg:*:sessions' sort false
+# Grouping these completions by description causes them to not be sorted
+zstyle ':completion:*:*:pg:*:sessions' list-grouped false
+zstyle ':completion:*:*:pg:*:templates' list-grouped false
+
 function _pg() {
     local context state state_descr line curcontext="$curcontext" command template
     local -a opt_args templates sessions
