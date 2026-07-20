@@ -34,9 +34,11 @@ var editorNewSessionExtraArgs = map[string]string{
 	"nvim":  "+{start_line} +normal$",
 	"vim":   "+{start_line} +normal$",
 	"vi":    "+{start_line} +normal$",
+	"emacs": "+{start_line}:999",
+	"hx":    "+{start_line}",
+	"kak":   "+{start_line}:999",
 	"nano":  "+{start_line}",
 	"pico":  "+{start_line}",
-	"emacs": "+{start_line}:999",
 }
 
 // runSession runs a session using the given template.
@@ -175,7 +177,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 				return fmt.Errorf("saving session: reading line from stdin: %s", err)
 			}
 			fmt.Println()
-			fmt.Println("Exit the editor with a non-zero exit code to skip this prompt in the future")
+			fmt.Println("Exit the editor with a non-zero exit code to skip this prompt")
 			return nil
 		}
 		sessionName := scanner.Text()

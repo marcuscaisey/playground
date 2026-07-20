@@ -65,8 +65,8 @@ func sessionCLI(ctx context.Context, args []string) int {
 	vertical := flagSet.Bool("vertical", false, "Split the window vertically instead of horizontally.")
 	resultsPaneSize := flagSet.StringWithEnvVar("results-pane-size", "PG_RESULTS_PANE_SIZE", "35%", "Results pane `size` in lines, or as a percentage if followed by '%'.\n")
 	editor := flagSet.StringWithEnvVar("editor", "EDITOR", "vi", "Shell `command` to open the editor."+`
-For nvim, vim, vi, emacs, nano, and pico, the template entrypoint is
-opened at the start line defined by the template.
+For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template
+entrypoint is opened at the start line defined by the template.
 `)
 	sessionsDir := flagSet.StringWithEnvVar("sessions-dir", sessionsDirEnvVar, defaultSessionsDir, "Named sessions `directory`.\n")
 	completionScriptShell := new(shell)
