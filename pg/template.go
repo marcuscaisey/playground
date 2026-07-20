@@ -58,11 +58,11 @@ func (t template) SetupSessionDir(dir string) error {
 	}
 	// Matches a whole line containing __CURSOR__ excluding the leading whitespace
 	placeholderRe := regexp.MustCompile(`(?m)^\s*((?:[^\s].*)?__CURSOR__.*)$`)
-	if loc := placeholderRe.FindIndex(entrypointContents); loc != nil {
+	if locs := placeholderRe.FindSubmatchIndex(entrypointContents); locs != nil {
 		// Replace with ' ' instead of '' so that when the editor is opened on the last character of
 		// the line (+normal$ arg passed to vim), it's on the first character after the leading
 		// whitespace.
-		entrypointContents = slices.Concat(entrypointContents[:loc[0]+1], []byte{' '}, entrypointContents[loc[1]:])
+		entrypointContents = slices.Concat(entrypointContents[:locs[2]], []byte{' '}, entrypointContents[locs[3]:])
 		if err := os.WriteFile(entrypointPath, entrypointContents, 0o666); err != nil {
 			return fmt.Errorf("setting up session directory: removing __CURSOR__ placeholder from entrypoint: %s", err)
 		}
