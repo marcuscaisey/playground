@@ -67,12 +67,8 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		if errors.Is(err, errTemplateNotFound) {
 			return fmt.Errorf("template %q not found", opts.TemplateName)
 		}
-		if templateInvalidErr, ok := errors.AsType[*templateInvalidError](err); ok {
-			templateSrc := fmt.Sprintf("built-in template %q", templateInvalidErr.Name)
-			if templateInvalidErr.Path != "" {
-				templateSrc = fmt.Sprintf("template %q (%q)", templateInvalidErr.Name, templateInvalidErr.Path)
-			}
-			return fmt.Errorf("%s is invalid: %s", templateSrc, templateInvalidErr.Reason)
+		if invalidErr, ok := errors.AsType[*templateInvalidError](err); ok {
+			return fmt.Errorf("template %q (%s) is invalid: %s", invalidErr.Name, invalidErr.Source, invalidErr.Reason)
 		}
 		return fmt.Errorf("running session: %s", err)
 	}

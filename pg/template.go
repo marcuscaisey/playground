@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"embed"
 	"errors"
 	"fmt"
@@ -86,10 +87,10 @@ var errTemplateNotFound = fmt.Errorf("not found")
 
 // templateInvalidError records an invalid template and the reason it's invalid.
 //
-// Path is empty for built-in templates.
+// Source describes where the template came from (built-in or path under user templates directory).
 type templateInvalidError struct {
 	Name   string
-	Path   string
+	Source string
 	Reason string
 }
 
@@ -97,10 +98,12 @@ func (e *templateInvalidError) Error() string {
 	return e.Reason
 }
 
+// newTemplateInvalidErrorf constructs a new [templateInvalidError].
+// Empty path is used for built-in templates.
 func newTemplateInvalidErrorf(name string, path string, reason string, a ...any) *templateInvalidError {
 	return &templateInvalidError{
 		Name:   name,
-		Path:   path,
+		Source: cmp.Or(path, "built-in"),
 		Reason: fmt.Sprintf(reason, a...),
 	}
 }
