@@ -43,13 +43,12 @@ var editorNewSessionExtraArgs = map[string]string{
 }
 
 // runSession runs a session using the given template.
-// It sets up the session directory, starts the results command in a new tmux pane, and opens the
-// template's entrypoint in the given editor.
-// If the session is named, then its directory is set up in the sessions directory, named after the
-// session. Otherwise, the session is anonymous and its directory is set up in a temporary directory
-// with a generated name.
-// If the session is anonymous and the editor exits successfully, the user is prompted to save their
-// session as a named session. If they confirm, then the session is moved to the sessions directory.
+// The template's entrypoint is opened in the given editor and the results are displayed in a
+// results pane below or to the side.
+//
+// Named sessions are run in a persistent directory under the sessions directory.
+// Anonymous sessions are run in a temporary directory and, after the editor exits successfully, may
+// be saved as a named session.
 func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	if err := validateDirNameSafe(opts.TemplateName); err != nil {
 		return fmt.Errorf("template name %q is invalid: %s", opts.TemplateName, err)
