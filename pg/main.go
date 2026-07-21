@@ -81,7 +81,7 @@ Example usage:
 		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Options:")
-		flagSet.SetOutput(os.Stderr) // Unsuppress output for [*flagSet.PrintDefaults]
+		flagSet.SetOutput(os.Stderr) // Unsuppress output for [flagSet.PrintDefaults]
 		flagSet.PrintDefaults()
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set.")

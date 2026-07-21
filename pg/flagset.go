@@ -11,10 +11,10 @@ import (
 	"unicode/utf8"
 )
 
-// flagSet wraps [*flag.FlagSet] and adds the following:
-//   - [*flagSet.PrintDefaults] prints flags in the order they were defined.
-//   - [*flagSet.StringWithEnvVar]
-//   - [*flagSet.CompletionDescriptions]
+// flagSet wraps [flag.FlagSet] and adds the following:
+//   - [flagSet.PrintDefaults] prints flags in the order they were defined.
+//   - [flagSet.StringWithEnvVar]
+//   - [flagSet.CompletionDescriptions]
 type flagSet struct {
 	*flag.FlagSet
 	defOrderedFlags []*flag.Flag
@@ -29,7 +29,7 @@ func newFlagSet(name string, errorHandling flag.ErrorHandling) *flagSet {
 	}
 }
 
-// StringWithEnvVar is like [*flag.FlagSet.String] but uses the given environment variable as a
+// StringWithEnvVar is like [flag.FlagSet.String] but uses the given environment variable as a
 // default value when set.
 func (fs *flagSet) StringWithEnvVar(name string, envVar string, value string, usage string) *string {
 	if usage[len(usage)-1] != '\n' {
@@ -43,23 +43,23 @@ func (fs *flagSet) StringWithEnvVar(name string, envVar string, value string, us
 	return p
 }
 
-// Var is the same as [*flag.FlagSet.Var].
+// Var is the same as [flag.FlagSet.Var].
 func (fs *flagSet) Var(value flag.Value, name string, usage string) {
 	fs.FlagSet.Var(value, name, usage)
 	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
 }
 
-// Bool is the same as [*flag.FlagSet.Bool].
+// Bool is the same as [flag.FlagSet.Bool].
 func (fs *flagSet) Bool(name string, value bool, usage string) *bool {
 	p := fs.FlagSet.Bool(name, value, usage)
 	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
 	return p
 }
 
-// PrintDefaults is like [*flag.FlagSet.PrintDefaults] except flags are printed in the order they
+// PrintDefaults is like [flag.FlagSet.PrintDefaults] except flags are printed in the order they
 // were defined.
 func (fs *flagSet) PrintDefaults() {
-	// Function body copied from [*flag.FlagSet.PrintDefaults]
+	// Function body copied from [flag.FlagSet.PrintDefaults]
 	var isZeroValueErrs []error
 	for _, f := range fs.defOrderedFlags {
 		var b strings.Builder

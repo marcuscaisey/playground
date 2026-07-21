@@ -108,7 +108,7 @@ func newTemplateInvalidErrorf(name string, path string, reason string, a ...any)
 // loadTemplate loads a template by searching the user's templates directory first, then the set of
 // built-in templates.
 // If the template does not exist, the returned error wraps [errTemplateNotFound].
-// If the loaded template is invalid, the returned error wraps [*templateInvalidError].
+// If the loaded template is invalid, the returned error wraps [templateInvalidError].
 func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	isBuiltin := false
 	templatePath := ""

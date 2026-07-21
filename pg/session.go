@@ -456,7 +456,7 @@ func tmux(ctx context.Context, args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// cmdWithStdio returns an [*exec.Cmd] which uses the standard input, ouput, and error of the
+// cmdWithStdio returns an [exec.Cmd] which uses the standard input, ouput, and error of the
 // current process.
 func cmdWithStdio(ctx context.Context, cmd string, args ...string) *exec.Cmd {
 	command := exec.CommandContext(ctx, cmd, args...)
