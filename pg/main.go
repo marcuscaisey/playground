@@ -53,14 +53,16 @@ func sessionCLI(ctx context.Context, args []string) int {
 	// By default, [flag.Parse] emits parsing errors without:
 	//   - "error: " before the error message
 	//   - A blank line betweeen the error message and the usage text
-	// We construct our own flag set to control what is emitted:
-	//   - Use [flag.ContinueOnError] error handling so that [*flagSet.Parse] returns parsing
-	//     errors to us instead of exiting. We can then prefix them with "error: " and print a
-	//     blank line where required.
-	//   - Discard all output until required (when we call [*flagSet.PrintDefaults]).
-	//     [*flagSet.Parse] emits parsing errors through [*orderedFlagSet.Output], so we need
-	//     to suppress this since we're going to be emitting these errors ourself.
+	// These are minor annoyances but make the command line interface inconsistent. We there
+	// construct our own flag set to control what is emitted.
+
+	// Use [flag.ContinueOnError] error handling so that [flagSet.Parse] returns parsing errors to
+	// us instead of exiting. We can then prefix them with "error: " and print a blank line where
+	// required.
 	flagSet := newFlagSet("pg", flag.ContinueOnError)
+	// Discard all output until required (when we call [flagSet.PrintDefaults]). [flagSet.Parse]
+	// emits parsing errors through [flagSet.Output], so we need to suppress this since
+	// we're going to be emitting these errors ourself.
 	flagSet.SetOutput(io.Discard)
 
 	defaultSessionsDir, err := defaultSessionsDir()
