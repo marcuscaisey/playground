@@ -19,6 +19,7 @@ func main() {
 
 const (
 	resultsSubcmd  = "__results"
+	completeSubcmd = "__complete"
 )
 
 // cli parses its args, runs one of the session, complete, or results commands, and returns the
@@ -27,13 +28,18 @@ func cli(args []string) int {
 	// SIGUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	if len(args) > 1 && args[1] == resultsSubcmd {
-		return resultsCLI(ctx, args[2:]) // Drop program name and command
-	} else if len(args) > 1 && args[1] == "__complete" {
-		return completeCLI(args[2:]) // Drop program name and command
-	} else {
-		return sessionCLI(ctx, args[1:]) // Drop program name
+	cmdArgs := args[1:] // Drop program name
+	if len(cmdArgs) > 1 {
+		subcmd := cmdArgs[0]
+		subcmdArgs := cmdArgs[1:] // Drop subcommand
+		switch subcmd {
+		case resultsSubcmd:
+			return resultsCLI(ctx, subcmdArgs)
+		case completeSubcmd:
+			return completeCLI(subcmdArgs)
+		}
 	}
+	return sessionCLI(ctx, cmdArgs)
 }
 
 const usageErrorExitCode = 2
@@ -206,7 +212,7 @@ func resultsCLI(ctx context.Context, args []string) int {
 // any errors, and returns an exit code.
 // It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
 func completeCLI(args []string) int {
-	flagSet := flag.NewFlagSet("__complete", flag.ExitOnError)
+	flagSet := flag.NewFlagSet(completeSubcmd, flag.ExitOnError)
 	shell := new(shell)
 	flagSet.Var(shell, "shell", "Shell to generate completions for")
 	usage := func() {
