@@ -83,7 +83,7 @@ Example usage:
     source <(pg -completion-script bash)
     source <(pg -completion-script zsh)
     pg -completion-script fish | source`)
-	printHelp := flagSet.Bool("help", false, "Print help message")
+	help := flagSet.Bool("help", false, "Print help message")
 
 	usage := func() {
 		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
@@ -104,8 +104,8 @@ Example usage:
 		return usageErrorf("%s", err)
 	}
 
-	if *printHelp {
-		usage()
+	if *help {
+		printUsage()
 		return 0
 	}
 
