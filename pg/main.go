@@ -85,7 +85,7 @@ Example usage:
     pg -completion-script fish | source`)
 	help := flagSet.Bool("help", false, "Print help message")
 
-	usage := func() {
+	printUsage := func() {
 		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Options:")
@@ -96,7 +96,7 @@ Example usage:
 	}
 	usageErrorf := func(msg string, a ...any) int {
 		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
-		usage()
+		printUsage()
 		return usageErrorExitCode
 	}
 
@@ -217,16 +217,16 @@ func completeCLI(args []string) int {
 	flagSet := flag.NewFlagSet(completeSubcmd, flag.ExitOnError)
 	shell := new(shell)
 	flagSet.Var(shell, "shell", "Shell to generate completions for")
-	usage := func() {
+	printUsage := func() {
 		fmt.Fprintln(os.Stderr, "Usage:")
 		fmt.Fprintln(os.Stderr, "    pg [-shell (bash|zsh|fish)] __complete templates")
 		fmt.Fprintln(os.Stderr, "    pg [-shell (bash|zsh|fish)] __complete sessions <template-name>")
 	}
 	usageError := func() int {
-		usage()
+		printUsage()
 		return usageErrorExitCode
 	}
-	flagSet.Usage = usage
+	flagSet.Usage = printUsage
 
 	_ = flagSet.Parse(args) // Parse will exit on any error
 
