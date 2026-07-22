@@ -9,18 +9,11 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 )
-
-//go:embed templates/*
-var builtinTemplatesFS embed.FS
-
-const builtinTemplatesDirName = "templates"
 
 const runScriptFilename = "run.sh"
 
@@ -39,10 +32,10 @@ const runScriptFilename = "run.sh"
 //   - Any other files needed to run the session
 type template struct {
 	Name                string // Template name; matches the template directory name
-	IsBuiltin           bool   // Whether the template is built-in
 	FS                  fs.FS  // File system containing the template's files
 	Entrypoint          string // Entrypoint filename, such as "main.go"
 	EntrypointStartLine int    // Line where the entrypoint should be opened
+	isBuiltIn           bool   // Whether the template is built-in
 }
 
 // SetupSessionDir copies the template's files into a session directory and erases the contents of
@@ -73,7 +66,7 @@ func (t template) SetupSessionDir(dir string) error {
 	// ‘.git/*’, symbolic links, 'vendor/', or any directories containing go.mod (these are separate
 	// modules).". This prevents us from including a go.mod file in the built-in Go template
 	// directory so we just write one to the session directory ourselves.
-	if t.Name == "go" && t.IsBuiltin {
+	if t.Name == "go" && t.isBuiltIn {
 		path := filepath.Join(dir, "go.mod")
 		data := []byte("module playground\n")
 		if err := os.WriteFile(path, data, 0o666); err != nil {
@@ -85,53 +78,69 @@ func (t template) SetupSessionDir(dir string) error {
 
 var errTemplateNotFound = fmt.Errorf("not found")
 
-// templateInvalidError records an invalid template and the reason it's invalid.
+// invalidTemplateError records an invalid template and the reason it's invalid.
 //
 // Source describes where the template came from (built-in or path under user templates directory).
-type templateInvalidError struct {
+type invalidTemplateError struct {
 	Name   string
 	Source string
 	Reason string
 }
 
-func (e *templateInvalidError) Error() string {
+func (e *invalidTemplateError) Error() string {
 	return e.Reason
 }
 
-// newTemplateInvalidErrorf constructs a new [templateInvalidError].
+// newInvalidTemplateErrorf constructs a new [invalidTemplateErrorf].
 // Empty path is used for built-in templates.
-func newTemplateInvalidErrorf(name string, path string, reason string, a ...any) *templateInvalidError {
-	return &templateInvalidError{
+func newInvalidTemplateErrorf(name string, path string, reason string, a ...any) *invalidTemplateError {
+	return &invalidTemplateError{
 		Name:   name,
 		Source: cmp.Or(path, "built-in"),
 		Reason: fmt.Sprintf(reason, a...),
 	}
 }
 
-// loadTemplate loads a template by searching the user's templates directory first, then the set of
+// File system containing the built-in templates directory
+//
+//go:embed templates/*
+var builtinTemplatesRootFS embed.FS
+
+// File system containing the built-in templates
+var builtinTemplatesFS fs.FS = func() fs.FS {
+	templatesFS, err := fs.Sub(builtinTemplatesRootFS, "templates")
+	if err != nil {
+		panic(fmt.Sprintf("failed to construct built-in templates file system: %s", err))
+	}
+	return templatesFS
+}()
+
+// loadTemplate loads a template by searching the user templates directory first, then the set of
 // built-in templates.
 // If the template does not exist, the returned error wraps [errTemplateNotFound].
-// If the loaded template is invalid, the returned error wraps [templateInvalidError].
+// If the loaded template is invalid, the returned error wraps [invalidTemplateErrorf].
 func loadTemplate(name string, userTemplatesDir string) (template, error) {
-	isBuiltin := false
-	templatePath := ""
 	var templateFS fs.FS
+	path := ""
 	userTemplatePath := filepath.Join(userTemplatesDir, name)
-	if ok, err := fileExists(userTemplatePath); err != nil {
-		return template{}, fmt.Errorf("loading template %q: %s", name, err)
-	} else if ok {
+	userTemplateExists, err := fileExists(userTemplatePath)
+	if err != nil {
+		return template{}, fmt.Errorf("loading template %q: checking user templates directory: %s", name, err)
+	}
+	if userTemplateExists {
 		templateFS = os.DirFS(userTemplatePath)
-		templatePath = userTemplatePath
-	} else if !ok {
-		templateFS, err = fs.Sub(builtinTemplatesFS, path.Join(builtinTemplatesDirName, name))
+		path = userTemplatePath
+	} else {
+		templateFS, err = fs.Sub(builtinTemplatesFS, name)
 		if err != nil {
-			return template{}, fmt.Errorf("loading template %q: %s", name, err)
+			return template{}, fmt.Errorf("loading template %q: checking built-in templates directory: %s", name, err)
 		}
-		isBuiltin = true
-		// [fs.Sub] doesn't check whether the dir exists, so we need to explicity check.
-		if ok, err := fileExistsFS(templateFS, "."); err != nil {
-			return template{}, fmt.Errorf("loading template %q: %s", name, err)
-		} else if !ok {
+		// [fs.Sub] doesn't check whether the dir exists, so we need to
+		builtinTemplateExists, err := fileExistsFS(templateFS, ".")
+		if err != nil {
+			return template{}, fmt.Errorf("loading template %q: checking built-in templates directory: %s", name, err)
+		}
+		if !builtinTemplateExists {
 			return template{}, fmt.Errorf("loading template %q: %w", name, errTemplateNotFound)
 		}
 	}
@@ -139,29 +148,25 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	const entrypointPattern = "main.*"
 	entrypoints, err := fs.Glob(templateFS, entrypointPattern)
 	if err != nil {
-		return template{}, fmt.Errorf("loading template %q: identifying entrypoint: %s", name, err)
+		// [fs.Glob] can only return [path.ErrBadPattern] so this should never happen
+		panic(fmt.Sprintf("failed to glob for entrypoint: %s", err))
 	}
 	var entrypoint string
 	switch len(entrypoints) {
 	case 1:
 		entrypoint = entrypoints[0]
 	case 0:
-		templateInvalidErr := newTemplateInvalidErrorf(name, templatePath, "entrypoint (%q file) is missing", entrypointPattern)
-		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
+		return template{}, fmt.Errorf("loading template %q: %w", name, newInvalidTemplateErrorf(name, path, "entrypoint (%q file) is missing", entrypointPattern))
 	default:
-		quotedEntrypoints := make([]string, len(entrypoints))
-		for i, entrypoint := range entrypoints {
-			quotedEntrypoints[i] = strconv.Quote(entrypoint)
-		}
-		templateInvalidErr := newTemplateInvalidErrorf(name, templatePath, "multiple entrypoints: %s", strings.Join(quotedEntrypoints, ", "))
-		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
+		return template{}, fmt.Errorf("loading template %q: %w", name, newInvalidTemplateErrorf(name, path, "multiple entrypoints: %q", entrypoints))
 	}
 
-	if ok, err := fileExistsFS(templateFS, runScriptFilename); err != nil {
+	runScriptExists, err := fileExistsFS(templateFS, runScriptFilename)
+	if err != nil {
 		return template{}, fmt.Errorf("loading template %q: %s", name, err)
-	} else if !ok {
-		templateInvalidErr := newTemplateInvalidErrorf(name, templatePath, "run script (%q file) is missing", runScriptFilename)
-		return template{}, fmt.Errorf("loading template %q: %w", name, templateInvalidErr)
+	}
+	if !runScriptExists {
+		return template{}, fmt.Errorf("loading template %q: %w", name, newInvalidTemplateErrorf(name, path, "run script (%q file) is missing", runScriptFilename))
 	}
 
 	f, err := templateFS.Open(entrypoint)
@@ -170,8 +175,8 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	}
 	defer f.Close() // nolint:errcheck // There's nothing we can do with this error
 	scanner := bufio.NewScanner(f)
-	entrypointStartLine := 0
 	line := 1
+	entrypointStartLine := 0
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), "__CURSOR__") {
 			entrypointStartLine = line
@@ -185,10 +190,10 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 
 	return template{
 		Name:                name,
-		IsBuiltin:           isBuiltin,
 		FS:                  templateFS,
 		Entrypoint:          entrypoint,
 		EntrypointStartLine: entrypointStartLine,
+		isBuiltIn:           path == "",
 	}, nil
 }
 
@@ -202,7 +207,7 @@ type templateInfo struct {
 func listTemplates(userTemplatesDir string) ([]templateInfo, error) {
 	templates := map[string]templateInfo{}
 
-	builtinTemplateDirs, err := fs.ReadDir(builtinTemplatesFS, builtinTemplatesDirName)
+	builtinTemplateDirs, err := fs.ReadDir(builtinTemplatesFS, ".")
 	if err != nil {
 		return nil, fmt.Errorf("listing templates: reading built-in templates: %s", err)
 	}

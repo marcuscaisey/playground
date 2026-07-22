@@ -67,7 +67,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		if errors.Is(err, errTemplateNotFound) {
 			return fmt.Errorf("template %q not found", opts.TemplateName)
 		}
-		if invalidErr, ok := errors.AsType[*templateInvalidError](err); ok {
+		if invalidErr, ok := errors.AsType[*invalidTemplateError](err); ok {
 			return fmt.Errorf("template %q (%s) is invalid: %s", invalidErr.Name, invalidErr.Source, invalidErr.Reason)
 		}
 		return fmt.Errorf("running session: %s", err)
