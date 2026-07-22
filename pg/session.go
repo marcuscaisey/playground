@@ -17,18 +17,6 @@ import (
 	"unicode"
 )
 
-type runSessionOptions struct {
-	TemplateName         string // Template name
-	SessionName          string // Session name; if empty, session is anonymous with generated name
-	Vertical             bool   // Whether to split the window vertically
-	ResultsPaneSize      string // Number of lines, or a percentage if followed by %
-	Editor               string // Shell command to open editor
-	SessionsDir          string // Path to sessions directory
-	SessionsDirIsDefault bool   // Whether the sessions directory is the default; used when printing example commands
-	UserTemplatesDir     string // Absolute path to user's templates directory
-	PgPath               string // Absolute path to pg executable; used to start the results command
-}
-
 // Extra arguments passed to each editor when a new session is started.
 // {start_line} is replaced with the line where the template's entrypoint should be opened.
 var editorNewSessionExtraArgs = map[string]string{
@@ -40,6 +28,22 @@ var editorNewSessionExtraArgs = map[string]string{
 	"kak":   "+{start_line}:999",
 	"nano":  "+{start_line}",
 	"pico":  "+{start_line}",
+}
+
+// File in the session directory which stores the sessions's last opened time as its modification
+// time
+const sessionLastOpenedMarker = ".pg-last-opened"
+
+type runSessionOptions struct {
+	TemplateName         string // Template name
+	SessionName          string // Session name; if empty, session is anonymous
+	Vertical             bool   // Whether to split the window vertically
+	ResultsPaneSize      string // Number of lines, or a percentage if followed by %
+	Editor               string // Shell command to open editor
+	SessionsDir          string // Path to sessions directory
+	SessionsDirIsDefault bool   // Whether the sessions directory is the default; used when printing example commands
+	UserTemplatesDir     string // Absolute path to user's templates directory
+	PgPath               string // Absolute path to pg executable; used to start the results command
 }
 
 // runSession runs a session using the given template.
@@ -73,14 +77,14 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	absSessionsDir, err := filepath.Abs(opts.SessionsDir)
+	sessionsDir, err := filepath.Abs(opts.SessionsDir)
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
 	}
 	var sessionDir string
 	sessionIsNew := true
 	if opts.SessionName != "" {
-		sessionDir, sessionIsNew, err = ensureNamedSessionDir(opts.SessionName, absSessionsDir, template)
+		sessionDir, sessionIsNew, err = ensureNamedSessionDir(opts.SessionName, sessionsDir, template)
 	} else {
 		sessionDir, err = setupAnonSessionDir(template)
 		defer func() {
@@ -96,7 +100,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	}
 
 	// Best effort as the last opened time is only depended upon during tab completion
-	_ = updateSessionLastOpened(sessionDir)
+	_ = os.WriteFile(filepath.Join(sessionDir, sessionLastOpenedMarker), nil, 0o666)
 
 	// Ensure that commands which rely on the current directory (like tmux split-window -c
 	// "#{pane_current_path}") work as expected.
@@ -187,7 +191,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 			continue
 		}
 
-		newSessionDir := namedSessionDir(sessionName, absSessionsDir, template.Name)
+		newSessionDir := namedSessionDir(sessionName, sessionsDir, template.Name)
 		if err := os.MkdirAll(filepath.Dir(newSessionDir), 0755); err != nil {
 			return fmt.Errorf("saving session: %s", err)
 		}
@@ -257,8 +261,9 @@ func shellQuote(arg string) string {
 
 const namedSessionStagingDirPrefix = ".pg-tmp"
 
-// ensureNamedSessionDir sets up a named session directory in the sessions directory if it doesn't
-// already exist. It returns the directory name and whether it was created by this call.
+// ensureNamedSessionDir creates and initializes a session directory from template in the sessions
+// directory if it doesn't already exist. The session directory is returned along with whether it
+// was created by this call.
 func ensureNamedSessionDir(sessionName string, sessionsDir string, template template) (sessionDir string, created bool, err error) {
 	sessionDir = namedSessionDir(sessionName, sessionsDir, template.Name)
 	if ok, err := fileExists(sessionDir); err != nil {
@@ -327,7 +332,7 @@ func listSessions(templateName string, sessionsDir string) ([]sessionInfo, error
 			continue
 		}
 		var lastOpened time.Time
-		lastOpenedPath := filepath.Join(templateSessionsDir, name, sessionLastOpenedFilename)
+		lastOpenedPath := filepath.Join(templateSessionsDir, name, sessionLastOpenedMarker)
 		// The file may have been removed by the user, this is fine
 		if info, err := os.Stat(lastOpenedPath); err == nil {
 			lastOpened = info.ModTime()
@@ -338,8 +343,8 @@ func listSessions(templateName string, sessionsDir string) ([]sessionInfo, error
 	return sessions, nil
 }
 
-// setupAnonSessionDir sets up an anonymous session directory in a temporary directory and returns
-// the directory name.
+// setupAnonSessionDir creates and initializes a session directory from template in a temporary
+// directory. The session directory is returned.
 func setupAnonSessionDir(template template) (string, error) {
 	sessionDirParent := filepath.Join(os.TempDir(), subdirName)
 	if err := os.MkdirAll(sessionDirParent, 0755); err != nil {
@@ -354,17 +359,6 @@ func setupAnonSessionDir(template template) (string, error) {
 		return "", err
 	}
 	return sessionDir, nil
-}
-
-const sessionLastOpenedFilename = ".pg-last-opened"
-
-// updateSessionLastOpened updates the session's last opened time.
-// This is stored as the modification time of the .pg-last-opened file in the session directory.
-func updateSessionLastOpened(sessionDir string) error {
-	if err := os.WriteFile(filepath.Join(sessionDir, sessionLastOpenedFilename), nil, 0o666); err != nil {
-		return fmt.Errorf("updating session last opened: %s", err)
-	}
-	return nil
 }
 
 // tmuxSplitPane splits the current tmux pane and runs a command in the new pane, leaving the
