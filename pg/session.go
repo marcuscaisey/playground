@@ -108,13 +108,36 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: changing to session directory: %s", err)
 	}
 
+	editor := strings.TrimSpace(opts.Editor)
+	editorCmdName, editorArgsString, _ := strings.Cut(editor, " ")
+	editorArgs := strings.Fields(editorArgsString)
+	if sessionIsNew {
+		editorName := filepath.Base(editorCmdName) // editorCmdName could be an absolute path
+		if format := editorNewSessionExtraArgs[editorName]; format != "" {
+			extraArgsString := strings.ReplaceAll(format, "{start_line}", strconv.Itoa(template.EntrypointStartLine))
+			extraArgs := strings.Fields(extraArgsString)
+			editorArgs = append(editorArgs, extraArgs...)
+		}
+	}
+	editorArgs = append(editorArgs, template.Entrypoint)
+	editorCmd := cmdWithStdio(ctx, editorCmdName, editorArgs...)
+	editorCmd.Dir = sessionDir
+	if err := editorCmd.Start(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return fmt.Errorf("editor %q not found in $PATH", editorCmdName)
+		}
+		return fmt.Errorf("running session: opening editor: %s", err)
+	}
+
 	// See [resultsCLI] for the results subcommand
+	// Do we actually need to escape this stuff? Can't we pass the args as actual arguments instead of as one big string?
 	resultsPaneCmd := fmt.Sprintf("%s %s %s %s", shellQuote(opts.PgPath), resultsSubcmd, shellQuote(sessionDir), shellQuote(template.Entrypoint))
 	resultsPaneID, err := tmuxSplitPane(ctx, resultsPaneCmd, opts.Vertical, opts.ResultsPaneSize)
 	if err != nil {
 		if errors.Is(err, errTmuxNotFound) {
 			return fmt.Errorf("tmux not found in $PATH")
 		}
+		// TODO: remove after it's not possible to get down here if we're not in a session
 		if errors.Is(err, errNotInTmuxSession) {
 			return fmt.Errorf("not in a tmux session")
 		}
@@ -140,24 +163,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 		return fmt.Errorf("running session: configuring results pane: %s", err)
 	}
 
-	editor := strings.TrimSpace(opts.Editor)
-	editorCmdName, editorArgsString, _ := strings.Cut(editor, " ")
-	editorArgs := strings.Fields(editorArgsString)
-	if sessionIsNew {
-		editorName := filepath.Base(editorCmdName) // editorCmdName could be an absolute path
-		if format := editorNewSessionExtraArgs[editorName]; format != "" {
-			extraArgsString := strings.ReplaceAll(format, "{start_line}", strconv.Itoa(template.EntrypointStartLine))
-			extraArgs := strings.Fields(extraArgsString)
-			editorArgs = append(editorArgs, extraArgs...)
-		}
-	}
-	editorArgs = append(editorArgs, template.Entrypoint)
-	editorCmd := cmdWithStdio(ctx, editorCmdName, editorArgs...)
-	editorCmd.Dir = sessionDir
-	if err := editorCmd.Run(); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return fmt.Errorf("editor %q not found in $PATH", editorCmdName)
-		}
+	if err := editorCmd.Wait(); err != nil {
 		// This is expected behaviour when the user doesn't want to be prompted to save their
 		// anonymous session. Also, if there is an actual error, it should be logged out by the
 		// editor anyway.
@@ -167,6 +173,7 @@ func runSession(ctx context.Context, opts runSessionOptions) (err error) {
 	if opts.SessionName != "" {
 		return nil
 	}
+	// It's a bit jarring to close the pane after we're finishing prompting so close it first.
 	// We still want to save the user's session if this fails and we're going to try killing the
 	// pane again when we exit this function anyway (where the error will also be recorded).
 	_ = killTmuxPane(ctx, resultsPaneID)
