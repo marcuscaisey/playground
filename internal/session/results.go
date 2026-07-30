@@ -1,4 +1,4 @@
-package main
+package session
 
 import (
 	"context"
@@ -13,9 +13,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// printSessionResults watches a session directory for changes to the entrypoint or run script,
-// executing the run script and printing the results when changes occur.
-func printSessionResults(ctx context.Context, sessionDir string, entrypoint string) (err error) {
+// PrintResults watches a session directory for changes to the entrypoint or run script, executing
+// the run script and printing the results when changes occur.
+func PrintResults(ctx context.Context, sessionDir string, entrypoint string) (err error) {
 	// Ensure that commands which rely on the current directory (like tmux split-window -c
 	// "#{pane_current_path}") work as expected.
 	if err := os.Chdir(sessionDir); err != nil {

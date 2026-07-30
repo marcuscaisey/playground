@@ -8,6 +8,8 @@ import (
 	"strings"
 	texttemplate "text/template"
 	"time"
+
+	"github.com/marcuscaisey/playground/internal/session"
 )
 
 // shell is a shell that completions can be generated for.
@@ -67,7 +69,7 @@ func allShells() []shell {
 var (
 	//go:embed completion/pg.bash.tmpl
 	bashCompletionScriptTmpl string
-	//go:embed completion/pg.zsh.tmpl
+	//go:embed completion/_pg.tmpl
 	zshCompletionScriptTmpl string
 	//go:embed completion/pg.fish.tmpl
 	fishCompletionScriptTmpl string
@@ -84,7 +86,7 @@ func completionScript(flagDescriptions map[string]string, shell shell) (string, 
 	case shellFish:
 		scriptTemplate = fishCompletionScriptTmpl
 	default:
-		panic(fmt.Sprintf("completionScript() not implemented for shell %q", shell))
+		return "", fmt.Errorf("completionScript: invalid shell %q", shell)
 	}
 	tmpl, err := texttemplate.New("script").Option("missingkey=error").Parse(scriptTemplate)
 	if err != nil {
@@ -115,7 +117,7 @@ func completionScript(flagDescriptions map[string]string, shell shell) (string, 
 // For zsh, the format is that expected by the zshcompsys _describe command name1 argument.
 // For fish, the format is that expected by the complete command --arguments flag.
 func completeTemplates(userTemplatesDir string, shell shell) error {
-	templates, err := listTemplates(userTemplatesDir)
+	templates, err := session.AllTemplates(userTemplatesDir)
 	if err != nil {
 		return fmt.Errorf("completing templates: %s", err)
 	}
@@ -134,11 +136,11 @@ func completeTemplates(userTemplatesDir string, shell shell) error {
 // For zsh, the format is that expected by the zshcompsys _describe command name1 argument.
 // For fish, the format is that expected by the complete command --arguments flag.
 func completeSessions(templateName string, sessionsDir string, shell shell) error {
-	sessions, err := listSessions(templateName, sessionsDir)
+	sessions, err := session.TemplateSessions(templateName, sessionsDir)
 	if err != nil {
 		return fmt.Errorf("completing sessions: %s", err)
 	}
-	slices.SortFunc(sessions, func(a sessionInfo, b sessionInfo) int {
+	slices.SortFunc(sessions, func(a session.Info, b session.Info) int {
 		if c := a.LastOpened.Compare(b.LastOpened); c != 0 {
 			return -c
 		}
@@ -190,7 +192,7 @@ func humanDuration(d time.Duration) string {
 // description describes the snippet, this is only shown for supporting shells.
 // For zsh, the format is that expected by the zshcompsys _describe command name1 argument.
 // For fish, the format is that expected by the complete command --arguments flag.
-// For other shell, value is returned unchanged.
+// For other shells, value is returned unchanged.
 func formatCompletion(value string, description string, shell shell) string {
 	switch shell {
 	case shellZsh:
@@ -205,7 +207,8 @@ func formatCompletion(value string, description string, shell shell) string {
 	case shellFish:
 		value := strings.ReplaceAll(value, "\t", strings.Repeat(" ", 4))
 		return value + "\t" + description
+	case shellBash:
 	default:
-		return value
 	}
+	return value
 }

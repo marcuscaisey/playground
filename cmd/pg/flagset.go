@@ -14,11 +14,13 @@ import (
 // flagSet wraps [flag.FlagSet] and adds the following:
 //   - [flagSet.PrintDefaults] prints flags in the order they were defined.
 //   - [flagSet.StringWithEnvVar]
+//   - [flagSet.VarWithEnvVar]
 //   - [flagSet.CompletionDescriptions]
 type flagSet struct {
 	*flag.FlagSet
 	defOrderedFlags []*flag.Flag
 	stringFlags     map[string]bool
+	flagEnvVars     map[string]string
 }
 
 // newFlagSet is the same as [flag.NewFlagSet].
@@ -26,21 +28,29 @@ func newFlagSet(name string, errorHandling flag.ErrorHandling) *flagSet {
 	return &flagSet{
 		FlagSet:     flag.NewFlagSet(name, errorHandling),
 		stringFlags: map[string]bool{},
+		flagEnvVars: map[string]string{},
 	}
 }
 
 // StringWithEnvVar is like [flag.FlagSet.String] but uses the given environment variable as a
 // default value when set.
 func (fs *flagSet) StringWithEnvVar(name string, envVar string, value string, usage string) *string {
-	if usage[len(usage)-1] != '\n' {
-		usage += " "
-	}
-	usage += fmt.Sprintf("(default %q) [$%s]", value, envVar)
-	p := fs.String(name, "", usage)
+	p := fs.String(name, value, usage)
 	*p = cmp.Or(os.Getenv(envVar), value)
 	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
 	fs.stringFlags[name] = true
+	fs.flagEnvVars[name] = envVar
 	return p
+}
+
+// VarWithEnvVar is like [flag.FlagSet.Var] but uses the given environment variable as a default
+// value when set and valid ([flag.Value.Set]).
+func (fs *flagSet) VarWithEnvVar(value flag.Value, name string, envVar string, usage string) {
+	fs.Var(value, name, usage)
+	if envValue := os.Getenv(envVar); envValue != "" {
+		_ = value.Set(envValue) // We can't do anything sensible at this point
+	}
+	fs.flagEnvVars[name] = envVar
 }
 
 // Var is the same as [flag.FlagSet.Var].
@@ -59,7 +69,7 @@ func (fs *flagSet) Bool(name string, value bool, usage string) *bool {
 // PrintDefaults is like [flag.FlagSet.PrintDefaults] except flags are printed in the order they
 // were defined.
 func (fs *flagSet) PrintDefaults() {
-	// Function body copied from [flag.FlagSet.PrintDefaults]
+	// Function body copied from [flag.FlagSet.PrintDefaults] and modified
 	var isZeroValueErrs []error
 	for _, f := range fs.defOrderedFlags {
 		var b strings.Builder
@@ -85,12 +95,18 @@ func (fs *flagSet) PrintDefaults() {
 		if isZero, err := isZeroValue(f, f.DefValue); err != nil {
 			isZeroValueErrs = append(isZeroValueErrs, err)
 		} else if !isZero {
+			if usage[len(usage)-1] != '\n' {
+				fmt.Fprintf(&b, " ")
+			}
 			if fs.stringFlags[f.Name] {
 				// put quotes on the value
-				fmt.Fprintf(&b, " (default %q)", f.DefValue)
+				fmt.Fprintf(&b, "(default %q)", f.DefValue)
 			} else {
-				fmt.Fprintf(&b, " (default %v)", f.DefValue)
+				fmt.Fprintf(&b, "(default %v)", f.DefValue)
 			}
+		}
+		if envVar, ok := fs.flagEnvVars[f.Name]; ok {
+			fmt.Fprintf(&b, " [$%s]", envVar)
 		}
 		_, _ = fmt.Fprint(fs.Output(), b.String(), "\n")
 	}
@@ -138,7 +154,6 @@ func isZeroValue(f *flag.Flag, value string) (ok bool, err error) {
 //   - Removing all lines after the first
 //   - Extracting the first sentence
 //   - Mapping the first letter to lowercase
-//   - Stripping out the default value description
 func (fs *flagSet) CompletionDescriptions() map[string]string {
 	descriptions := map[string]string{}
 	fs.VisitAll(func(f *flag.Flag) {
@@ -146,7 +161,6 @@ func (fs *flagSet) CompletionDescriptions() map[string]string {
 		usage, _, _ = strings.Cut(usage, "\n")
 		usage, _, _ = strings.Cut(usage, ".")
 		usage = lowerFirstLetter(usage)
-		usage, _, _ = strings.Cut(usage, " (default")
 		descriptions[f.Name] = usage
 	})
 	return descriptions

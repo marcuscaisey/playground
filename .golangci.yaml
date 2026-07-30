@@ -1,0 +1,38 @@
+# Defines the configuration version.
+# The only possible value is "2".
+version: "2"
+linters:
+  # Enable specific linter.
+  # https://golangci-lint.run/usage/linters/#enabled-by-default
+  enable:
+    - exhaustive
+    - revive
+
+  # All available settings of specific linters.
+  settings:
+    exhaustive:
+      # Enum members matching the supplied regex do not have to be listed in
+      # switch statements to satisfy exhaustiveness.
+      # Default: ""
+      ignore-enum-members: "shellsStart|shellsEnd"
+
+  # Defines a set of rules to ignore issues.
+  # It does not skip the analysis, and so does not ignore "typecheck" errors.
+  exclusions:
+    # Predefined exclusion rules.
+    # Default: []
+    presets:
+      - std-error-handling
+
+    # Excluding configuration per-path, per-linter, per-text and per-source.
+    rules:
+      - linters:
+          - revive
+        text: 'indent-error-flow: if block ends with a return statement, so drop this else and outdent its block'
+
+formatters:
+  # Enable specific formatter.
+  # Default: [] (uses standard Go formatting)
+  enable:
+    - gci
+    - gofmt

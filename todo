@@ -1,5 +1,11 @@
+* Extract CLI arg parsing
+* Attribution for copied sources (flagSet, humanDuration)?
+* Allow shell script to use any shebang
+* Allow sessions for templates which have been deleted?
+* Do we handle SIGINT, SIGTERM, SIGHUP correctly?
+* Use _ to ignore errors and add go over comments
+* Remove __results subcommand
 * Include hints to install missing dependencies in error messages
-* Error for missing bash
 * Disable staticheck / errcheck / etc in gopls, use golangcilint instead
 * Decide when to show full / partial help text
 * Add more documentation to -help output?

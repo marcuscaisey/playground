@@ -1,20 +1,26 @@
+// Package main is the entrypoint to pg.
 package main
 
 import (
+	"bufio"
 	"cmp"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
+
+	"github.com/marcuscaisey/playground/internal/session"
 )
 
 func main() {
-	os.Exit(cli(os.Args))
+	os.Exit(run())
 }
 
 const (
@@ -22,13 +28,12 @@ const (
 	completeSubcmd = "__complete"
 )
 
-// cli parses its args, runs one of the session, complete, or results commands, and returns the
-// corresponding exit code.
-func cli(args []string) int {
+// run runs pg and returns its exit status.
+func run() int {
 	// SIGUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	cmdArgs := args[1:] // Drop program name
+	cmdArgs := os.Args[1:] // Drop program name
 	if len(cmdArgs) > 1 {
 		subcmd := cmdArgs[0]
 		subcmdArgs := cmdArgs[1:] // Drop subcommand
@@ -39,17 +44,20 @@ func cli(args []string) int {
 			return completeCLI(subcmdArgs)
 		}
 	}
-	return sessionCLI(ctx, cmdArgs)
+	return mainCLI(ctx, cmdArgs)
 }
 
-const usageErrorExitCode = 2
+const (
+	generalExitStatus    = 1
+	usageErrorExitStatus = 2
+)
 
 const sessionsDirEnvVar = "PG_SESSIONS_DIR"
 
-// sessionCLI parses the args for the session command, runs a session, reports any errors, and
-// returns an exit code.
-// It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
-func sessionCLI(ctx context.Context, args []string) int {
+// mainCLI runs the main command line interface and returns the exit status.
+// The main command line interface is responsible for running sessions and printing completion
+// scripts for various shells.
+func mainCLI(ctx context.Context, args []string) (status int) {
 	// By default, [flag.Parse] emits parsing errors without:
 	//   - "error: " before the error message
 	//   - A blank line betweeen the error message and the usage text
@@ -71,8 +79,9 @@ func sessionCLI(ctx context.Context, args []string) int {
 	}
 
 	vertical := flagSet.Bool("vertical", false, "Split the window vertically instead of horizontally.")
-	resultsPaneSize := flagSet.StringWithEnvVar("results-pane-size", "PG_RESULTS_PANE_SIZE", "35%", "Results pane `size` in lines, or as a percentage if followed by '%'.\n")
-	editor := flagSet.StringWithEnvVar("editor", "EDITOR", "vi", "Shell `command` to open the editor."+`
+	resultsPaneSize := new(session.TmuxPaneSize("35%"))
+	flagSet.VarWithEnvVar(resultsPaneSize, "results-pane-size", "PG_RESULTS_PANE_SIZE", "Results pane `size` in lines, or as a percentage if followed by '%'.\n")
+	editorShellCmd := flagSet.StringWithEnvVar("editor", "EDITOR", "vi", "Shell `command` to open the editor."+`
 For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template
 entrypoint is opened at the start line defined by the template.
 `)
@@ -92,12 +101,12 @@ Example usage:
 		flagSet.SetOutput(os.Stderr) // Unsuppress output for [flagSet.PrintDefaults]
 		flagSet.PrintDefaults()
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set.")
+		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set and valid.")
 	}
 	usageErrorf := func(msg string, a ...any) int {
 		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
 		printUsage()
-		return usageErrorExitCode
+		return usageErrorExitStatus
 	}
 
 	if err := flagSet.Parse(args); err != nil {
@@ -131,6 +140,13 @@ Example usage:
 		return usageErrorf("unexpected arguments: %s", strings.Join(flagSet.Args()[2:], ", "))
 	}
 
+	var editor string
+	var editorArgs []string
+	if fields := strings.Fields(strings.TrimSpace(*editorShellCmd)); len(fields) > 0 {
+		editor = fields[0]
+		editorArgs = fields[1:]
+	}
+
 	userTemplatesDir, err := userTemplatesDir()
 	if err != nil {
 		return errorExit(err)
@@ -139,32 +155,99 @@ Example usage:
 	if err != nil {
 		return errorExit(err)
 	}
-	opts := runSessionOptions{
-		TemplateName:         templateName,
-		SessionName:          sessionName,
-		Vertical:             *vertical,
-		ResultsPaneSize:      *resultsPaneSize,
-		Editor:               *editor,
-		SessionsDir:          *sessionsDir,
-		SessionsDirIsDefault: *sessionsDir == defaultSessionsDir,
-		UserTemplatesDir:     userTemplatesDir,
-		PgPath:               pgPath,
+
+	ses, err := session.New(sessionName, templateName, *sessionsDir, userTemplatesDir, pgPath)
+	if err != nil {
+		if errors.Is(err, session.ErrTemplateNotFound) {
+			return errorExitf("template %q not found", templateName)
+		}
+		if invalidErr, ok := errors.AsType[*session.InvalidTemplateError](err); ok {
+			return errorExitf("template %q (%s) is invalid: %s", invalidErr.Name, invalidErr.Source, invalidErr.Reason)
+		}
+		if invalidErr, ok := errors.AsType[*session.InvalidTemplateNameError](err); ok {
+			return errorExitf("template name %q is invalid: %s", invalidErr.Name, invalidErr.Reason)
+		}
+		if invalidErr, ok := errors.AsType[*session.InvalidNameError](err); ok {
+			return errorExitf("session name %q is invalid: %s", invalidErr.Name, invalidErr.Reason)
+		}
+		return errorExit(err)
 	}
-	if err := runSession(ctx, opts); err != nil {
+	defer func() {
+		// If there was an error, keep the anonymous session directory around so its contents can be
+		// recovered
+		if status == 0 && ses.Name == "" && ses.Dir != "" {
+			_ = os.RemoveAll(ses.Dir) // This is a temp directory, so it's fine if this fails
+		}
+	}()
+
+	if err := ses.Run(ctx, *resultsPaneSize, *vertical, editor, editorArgs...); err != nil {
+		if errors.Is(err, session.ErrEditorError) {
+			// This is expected when the user doesn't want to be prompted to save their anonymous
+			// session. If there was an actual error, the editor will log it to stdout/stderr
+			// anyway.
+			return 0
+		}
+		if notFoundErr, ok := errors.AsType[*session.EditorNotFoundError](err); ok {
+			return errorExitf("editor %q not found in $PATH", notFoundErr.Editor)
+		}
+		if errors.Is(err, session.ErrTmuxNotFound) {
+			return errorExitf("tmux not found on $PATH")
+		}
+		if errors.Is(err, session.ErrBashNotFound) {
+			return errorExitf("bash not found on $PATH")
+		}
 		return errorExit(err)
 	}
 
-	return 0
-}
+	if ses.Name != "" {
+		return 0
+	}
 
-const subdirName = "pg" // Subdirectory name used when storing pg specific files in another directory
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("Enter a name to save this session (or Ctrl-D to abort): ")
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return errorExitf("saving session: reading line from stdin: %s", err)
+			}
+			fmt.Println()
+			fmt.Println("Exit editor with a non-zero status to skip this prompt")
+			return 0
+		}
+		sessionName := scanner.Text()
+		if sessionName == "" {
+			continue
+		}
+		if err := ses.Save(sessionName); err != nil {
+			if alreadyExistsErr, ok := errors.AsType[*session.AlreadyExistsError](err); ok {
+				fmt.Printf("A %q session named %q already exists:\n", ses.TemplateName, alreadyExistsErr.Name)
+				fmt.Printf("  %s\n", alreadyExistsErr.Dir)
+				continue
+			}
+			if invalidErr, ok := errors.AsType[*session.InvalidNameError](err); ok {
+				fmt.Printf("session name %q is invalid: %s\n", invalidErr.Name, invalidErr.Reason)
+				continue
+			}
+			return errorExit(err)
+		}
+		fmt.Printf("Saved %q session %q to:\n", ses.TemplateName, ses.Name)
+		fmt.Printf("  %s\n", ses.Dir)
+		fmt.Printf("To resume, run:\n")
+		sessionsDirFlag := ""
+		if *sessionsDir != defaultSessionsDir {
+			sessionsDirFlag = fmt.Sprintf("-sessions-dir %s ", shellQuote(*sessionsDir))
+		}
+		fmt.Printf("  pg %s%s %s\n", sessionsDirFlag, shellQuote(ses.TemplateName), shellQuote(ses.Name))
+		return 0
+	}
+}
 
 func defaultSessionsDir() (string, error) {
 	dataDir, err := xdgDataHome()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dataDir, subdirName, "sessions"), nil
+	return filepath.Join(dataDir, "pg", "sessions"), nil
 }
 
 func userTemplatesDir() (string, error) {
@@ -172,7 +255,7 @@ func userTemplatesDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(configDir, subdirName, "templates"), nil
+	return filepath.Join(configDir, "pg", "templates"), nil
 }
 
 func xdgDataHome() (string, error) {
@@ -194,25 +277,35 @@ func xdgDir(envVar string, homeSubDir string) (string, error) {
 	return filepath.Join(homeDir, homeSubDir), nil
 }
 
-// resultsCLI parses the args for the results command, prints the results for a session, reports any
-// errors, and returns an exit code.
-// It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
+// shellQuote returns arg quoted so that it can be used as a literal shell command argument.
+// If arg consists entirely of "safe" characters, then it's returned unchanged.
+func shellQuote(arg string) string {
+	safeCharsRe := regexp.MustCompile(`^[\w\-./]+$`)
+	if safeCharsRe.MatchString(arg) {
+		return arg
+	}
+	return fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", `'\''`))
+}
+
+// resultsCLI runs the command line interface for the __results subcommand and returns the exit
+// status.
+// The __results subcommand runs in the results pane and executes the entrypoint on save.
 func resultsCLI(ctx context.Context, args []string) int {
 	if len(args) != 2 {
 		fmt.Fprintln(os.Stderr, "Usage: pg __results <session-dir> <entrypoint>")
-		return usageErrorExitCode
+		return usageErrorExitStatus
 	}
 	sessionDir := args[0]
 	entrypoint := args[1]
-	if err := printSessionResults(ctx, sessionDir, entrypoint); err != nil {
+	if err := session.PrintResults(ctx, sessionDir, entrypoint); err != nil {
 		return errorExit(err)
 	}
 	return 0
 }
 
-// completeCLI parses the args for the complete command, prints the requested completions, reports
-// any errors, and returns an exit code.
-// It returns 0 for success or help, 2 for incorrect CLI usage, and 1 for other errors.
+// completeCLI runs the command line interface for the __complete subcommand and returns the exit
+// status.
+// The __complete subcommand prints completions for templates and sessions.
 func completeCLI(args []string) int {
 	flagSet := flag.NewFlagSet(completeSubcmd, flag.ExitOnError)
 	shell := new(shell)
@@ -224,7 +317,7 @@ func completeCLI(args []string) int {
 	}
 	usageError := func() int {
 		printUsage()
-		return usageErrorExitCode
+		return usageErrorExitStatus
 	}
 	flagSet.Usage = printUsage
 
@@ -268,8 +361,15 @@ func completeCLI(args []string) int {
 	return 0
 }
 
-// errorExit reports an error and returns the general error exit code 1.
+// errorExit reports an error and returns the general error exit status 1.
 func errorExit(err error) int {
 	fmt.Fprintf(os.Stderr, "error: %s\n", err)
-	return 1
+	return generalExitStatus
+}
+
+// errorExit reports an error message and returns the general error exit status 1.
+func errorExitf(format string, a ...any) int {
+	msg := fmt.Sprintf(format, a...)
+	fmt.Fprintf(os.Stderr, "error: %s\n", msg)
+	return generalExitStatus
 }
