@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -11,13 +12,13 @@ import (
 	"unicode/utf8"
 )
 
-// flagSet wraps [flag.FlagSet] and adds the following:
+// flagSet wraps [flag.FlagSet] and adds the following methods:
 //   - [flagSet.PrintDefaults] prints flags in the order they were defined.
-//   - [flagSet.StringWithEnvVar]
+//   - [flagSet.StringVarWithEnvVar]
 //   - [flagSet.VarWithEnvVar]
 //   - [flagSet.CompletionDescriptions]
 type flagSet struct {
-	*flag.FlagSet
+	base            *flag.FlagSet
 	defOrderedFlags []*flag.Flag
 	stringFlags     map[string]bool
 	flagEnvVars     map[string]string
@@ -26,45 +27,14 @@ type flagSet struct {
 // newFlagSet is the same as [flag.NewFlagSet].
 func newFlagSet(name string, errorHandling flag.ErrorHandling) *flagSet {
 	return &flagSet{
-		FlagSet:     flag.NewFlagSet(name, errorHandling),
+		base:        flag.NewFlagSet(name, errorHandling),
 		stringFlags: map[string]bool{},
 		flagEnvVars: map[string]string{},
 	}
 }
 
-// StringWithEnvVar is like [flag.FlagSet.String] but uses the given environment variable as a
-// default value when set.
-func (fs *flagSet) StringWithEnvVar(name string, envVar string, value string, usage string) *string {
-	p := fs.String(name, value, usage)
-	*p = cmp.Or(os.Getenv(envVar), value)
-	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
-	fs.stringFlags[name] = true
-	fs.flagEnvVars[name] = envVar
-	return p
-}
-
-// VarWithEnvVar is like [flag.FlagSet.Var] but uses the given environment variable as a default
-// value when set and valid ([flag.Value.Set]).
-func (fs *flagSet) VarWithEnvVar(value flag.Value, name string, envVar string, usage string) {
-	fs.Var(value, name, usage)
-	if envValue := os.Getenv(envVar); envValue != "" {
-		_ = value.Set(envValue) // We can't do anything sensible at this point
-	}
-	fs.flagEnvVars[name] = envVar
-}
-
-// Var is the same as [flag.FlagSet.Var].
-func (fs *flagSet) Var(value flag.Value, name string, usage string) {
-	fs.FlagSet.Var(value, name, usage)
-	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
-}
-
-// Bool is the same as [flag.FlagSet.Bool].
-func (fs *flagSet) Bool(name string, value bool, usage string) *bool {
-	p := fs.FlagSet.Bool(name, value, usage)
-	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.Lookup(name))
-	return p
-}
+// SetOutput is the same as [flag.FlagSet.SetOutput].
+func (fs *flagSet) SetOutput(output io.Writer) { fs.base.SetOutput(output) }
 
 // PrintDefaults is like [flag.FlagSet.PrintDefaults] except flags are printed in the order they
 // were defined.
@@ -108,15 +78,15 @@ func (fs *flagSet) PrintDefaults() {
 		if envVar, ok := fs.flagEnvVars[f.Name]; ok {
 			fmt.Fprintf(&b, " [$%s]", envVar)
 		}
-		_, _ = fmt.Fprint(fs.Output(), b.String(), "\n")
+		_, _ = fmt.Fprint(fs.base.Output(), b.String(), "\n")
 	}
 	// If calling String on any zero flag.Values triggered a panic, print
 	// the messages after the full set of defaults so that the programmer
 	// knows to fix the panic.
 	if errs := isZeroValueErrs; len(errs) > 0 {
-		_, _ = fmt.Fprintln(fs.Output())
+		_, _ = fmt.Fprintln(fs.base.Output())
 		for _, err := range errs {
-			_, _ = fmt.Fprintln(fs.Output(), err)
+			_, _ = fmt.Fprintln(fs.base.Output(), err)
 		}
 	}
 }
@@ -148,6 +118,71 @@ func isZeroValue(f *flag.Flag, value string) (ok bool, err error) {
 	return value == z.Interface().(flag.Value).String(), nil
 }
 
+// NFlag is the same as [flag.FlagSet.NFlag].
+func (fs *flagSet) NFlag() int { return fs.base.NFlag() }
+
+// Arg is the same as [flag.FlagSet.Arg].
+func (fs *flagSet) Arg(i int) string { return fs.base.Arg(i) }
+
+// NArg is the same as [flag.FlagSet.NArg].
+func (fs *flagSet) NArg() int { return fs.base.NArg() }
+
+// Args is the same as [flag.FlagSet.Args].
+func (fs *flagSet) Args() []string { return fs.base.Args() }
+
+// BoolVar is the same as [flag.FlagSet.BoolVar].
+func (fs *flagSet) BoolVar(p *bool, name string, value bool, usage string) {
+	fs.base.BoolVar(p, name, value, usage)
+	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.base.Lookup(name))
+}
+
+// Bool is the same as [flag.FlagSet.Bool].
+func (fs *flagSet) Bool(name string, value bool, usage string) *bool {
+	p := fs.base.Bool(name, value, usage)
+	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.base.Lookup(name))
+	return p
+}
+
+// StringVarWithEnvVar is like [flag.FlagSet.StringVar] but uses the given environment variable as a
+// default value when set.
+func (fs *flagSet) StringVarWithEnvVar(p *string, name string, envVar string, value string, usage string) {
+	fs.base.StringVar(p, name, value, usage)
+	*p = cmp.Or(os.Getenv(envVar), value)
+	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.base.Lookup(name))
+	fs.stringFlags[name] = true
+	fs.flagEnvVars[name] = envVar
+}
+
+// FuncWithEnvVar is like [flag.FlagSet.Func] but uses the given environment variable as a default
+// value when set and valid.
+func (fs *flagSet) FuncWithEnvVar(name string, envVar string, usage string, fn func(string) error) {
+	fs.base.Func(name, usage, fn)
+	if envValue := os.Getenv(envVar); envValue != "" {
+		_ = fn(envValue)
+	}
+	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.base.Lookup(name))
+	fs.flagEnvVars[name] = envVar
+}
+
+// Var is the same as [flag.FlagSet.Var].
+func (fs *flagSet) Var(value flag.Value, name string, usage string) {
+	fs.base.Var(value, name, usage)
+	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.base.Lookup(name))
+}
+
+// VarWithEnvVar is like [flag.FlagSet.Var] but uses the given environment variable as a default
+// value when set and valid ([flag.Value.Set]).
+func (fs *flagSet) VarWithEnvVar(value flag.Value, name string, envVar string, usage string) {
+	fs.Var(value, name, usage)
+	if envValue := os.Getenv(envVar); envValue != "" {
+		_ = value.Set(envValue) // We can't do anything sensible at this point
+	}
+	fs.flagEnvVars[name] = envVar
+}
+
+// Parse is the same as [flag.FlagSet.Parse].
+func (fs *flagSet) Parse(arguments []string) error { return fs.base.Parse(arguments) }
+
 // CompletionDescriptions returns a map from flag name to shell completion description.
 // The description is generated by taking usage text and:
 //   - Removing the back-quotes from the parameter type (first back-quoted name)
@@ -156,7 +191,7 @@ func isZeroValue(f *flag.Flag, value string) (ok bool, err error) {
 //   - Mapping the first letter to lowercase
 func (fs *flagSet) CompletionDescriptions() map[string]string {
 	descriptions := map[string]string{}
-	fs.VisitAll(func(f *flag.Flag) {
+	fs.base.VisitAll(func(f *flag.Flag) {
 		_, usage := flag.UnquoteUsage(f)
 		usage, _, _ = strings.Cut(usage, "\n")
 		usage, _, _ = strings.Cut(usage, ".")

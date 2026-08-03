@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	os.Exit(run())
+	os.Exit(runCLI())
 }
 
 const (
@@ -28,8 +28,8 @@ const (
 	completeSubcmd = "__complete"
 )
 
-// run runs pg and returns its exit status.
-func run() int {
+// runCLI runs the pg command line interface and returns its exit status.
+func runCLI() int {
 	// SIGUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
@@ -39,112 +39,20 @@ func run() int {
 		subcmdArgs := cmdArgs[1:] // Drop subcommand
 		switch subcmd {
 		case resultsSubcmd:
-			return resultsCLI(ctx, subcmdArgs)
+			return runResultsCLI(ctx, subcmdArgs)
 		case completeSubcmd:
-			return completeCLI(subcmdArgs)
+			return runCompleteCLI(subcmdArgs)
 		}
 	}
-	return mainCLI(ctx, cmdArgs)
+	return runMainCLI(ctx, cmdArgs)
 }
 
-const (
-	generalExitStatus    = 1
-	usageErrorExitStatus = 2
-)
-
-const sessionsDirEnvVar = "PG_SESSIONS_DIR"
-
-// mainCLI runs the main command line interface and returns the exit status.
-// The main command line interface is responsible for running sessions and printing completion
-// scripts for various shells.
-func mainCLI(ctx context.Context, args []string) (status int) {
-	// By default, [flag.Parse] emits parsing errors without:
-	//   - "error: " before the error message
-	//   - A blank line betweeen the error message and the usage text
-	// These are minor annoyances but make the command line interface inconsistent. We there
-	// construct our own flag set to control what is emitted.
-
-	// Use [flag.ContinueOnError] error handling so that [flagSet.Parse] returns parsing errors to
-	// us instead of exiting. We can then prefix them with "error: " and print a blank line where
-	// required.
-	flagSet := newFlagSet("pg", flag.ContinueOnError)
-	// Discard all output until required (when we call [flagSet.PrintDefaults]). [flagSet.Parse]
-	// emits parsing errors through [flagSet.Output], so we need to suppress this since
-	// we're going to be emitting these errors ourself.
-	flagSet.SetOutput(io.Discard)
-
-	defaultSessionsDir, err := defaultSessionsDir()
-	if err != nil {
-		return errorExit(err)
-	}
-
-	vertical := flagSet.Bool("vertical", false, "Split the window vertically instead of horizontally.")
-	resultsPaneSize := new(session.TmuxPaneSize("35%"))
-	flagSet.VarWithEnvVar(resultsPaneSize, "results-pane-size", "PG_RESULTS_PANE_SIZE", "Results pane `size` in lines, or as a percentage if followed by '%'.\n")
-	editorShellCmd := flagSet.StringWithEnvVar("editor", "EDITOR", "vi", "Shell `command` to open the editor."+`
-For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template
-entrypoint is opened at the start line defined by the template.
-`)
-	sessionsDir := flagSet.StringWithEnvVar("sessions-dir", sessionsDirEnvVar, defaultSessionsDir, "Named sessions `directory`.\n")
-	completionScriptShell := new(shell)
-	flagSet.Var(completionScriptShell, "completion-script", "Generate a `shell` completion script for bash, zsh, or fish."+`
-Example usage:
-    source <(pg -completion-script bash)
-    source <(pg -completion-script zsh)
-    pg -completion-script fish | source`)
-	help := flagSet.Bool("help", false, "Print help message")
-
-	printUsage := func() {
-		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Options:")
-		flagSet.SetOutput(os.Stderr) // Unsuppress output for [flagSet.PrintDefaults]
-		flagSet.PrintDefaults()
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set and valid.")
-	}
-	usageErrorf := func(msg string, a ...any) int {
-		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
-		printUsage()
-		return usageErrorExitStatus
-	}
-
-	if err := flagSet.Parse(args); err != nil {
-		return usageErrorf("%s", err)
-	}
-
-	if *help {
-		printUsage()
-		return 0
-	}
-
-	if *completionScriptShell != 0 {
-		if flagSet.NFlag() > 1 || flagSet.NArg() > 0 {
-			return usageErrorf("-completion-script flag must be provided on its own")
-		}
-		flagDescriptions := flagSet.CompletionDescriptions()
-		completionScript, err := completionScript(flagDescriptions, *completionScriptShell)
-		if err != nil {
-			return errorExit(err)
-		}
-		fmt.Print(completionScript)
-		return 0
-	}
-
-	templateName := flagSet.Arg(0)
-	if templateName == "" {
-		return usageErrorf("template name not provided")
-	}
-	sessionName := flagSet.Arg(1)
-	if flagSet.NArg() > 2 {
-		return usageErrorf("unexpected arguments: %s", strings.Join(flagSet.Args()[2:], ", "))
-	}
-
-	var editor string
-	var editorArgs []string
-	if fields := strings.Fields(strings.TrimSpace(*editorShellCmd)); len(fields) > 0 {
-		editor = fields[0]
-		editorArgs = fields[1:]
+// runMainCLI runs the main command line interface and returns the exit status.
+// The main command line interface is responsible for running sessions.
+func runMainCLI(ctx context.Context, a []string) (status int) {
+	args := args{}
+	if status := parseArgs(a, &args); status >= 0 {
+		return status
 	}
 
 	userTemplatesDir, err := userTemplatesDir()
@@ -156,10 +64,10 @@ Example usage:
 		return errorExit(err)
 	}
 
-	ses, err := session.New(sessionName, templateName, *sessionsDir, userTemplatesDir, pgPath)
+	ses, err := session.New(args.SessionName, args.TemplateName, args.SessionsDir, userTemplatesDir, pgPath)
 	if err != nil {
 		if errors.Is(err, session.ErrTemplateNotFound) {
-			return errorExitf("template %q not found", templateName)
+			return errorExitf("template %q not found", args.TemplateName)
 		}
 		if invalidErr, ok := errors.AsType[*session.InvalidTemplateError](err); ok {
 			return errorExitf("template %q (%s) is invalid: %s", invalidErr.Name, invalidErr.Source, invalidErr.Reason)
@@ -180,7 +88,7 @@ Example usage:
 		}
 	}()
 
-	if err := ses.Run(ctx, *resultsPaneSize, *vertical, editor, editorArgs...); err != nil {
+	if err := ses.Run(ctx, args.ResultsPaneSize, args.Vertical, args.Editor, args.EditorArgs...); err != nil {
 		if errors.Is(err, session.ErrEditorError) {
 			// This is expected when the user doesn't want to be prompted to save their anonymous
 			// session. If there was an actual error, the editor will log it to stdout/stderr
@@ -234,12 +142,140 @@ Example usage:
 		fmt.Printf("  %s\n", ses.Dir)
 		fmt.Printf("To resume, run:\n")
 		sessionsDirFlag := ""
-		if *sessionsDir != defaultSessionsDir {
-			sessionsDirFlag = fmt.Sprintf("-sessions-dir %s ", shellQuote(*sessionsDir))
+		if defaultSessionsDir, err := defaultSessionsDir(); err != nil {
+			return errorExit(err)
+		} else if args.SessionsDir != defaultSessionsDir {
+			sessionsDirFlag = fmt.Sprintf("-sessions-dir %s ", shellQuote(args.SessionsDir))
 		}
 		fmt.Printf("  pg %s%s %s\n", sessionsDirFlag, shellQuote(ses.TemplateName), shellQuote(ses.Name))
 		return 0
 	}
+}
+
+const (
+	generalExitStatus    = 1
+	usageErrorExitStatus = 2
+)
+
+const sessionsDirEnvVar = "PG_SESSIONS_DIR"
+
+type args struct {
+	TemplateName    string
+	SessionName     string
+	Vertical        bool
+	ResultsPaneSize session.TmuxPaneSize
+	Editor          string
+	EditorArgs      []string
+	SessionsDir     string
+}
+
+// parseArgs parses the provided arguments and stores the result in the value pointed to by args.
+// It returns an exit status >= 0 if the program should exit.
+// If -help is provided, a help message is printed.
+// If -completion-script $shell is provided, the completion script for $shell is printed.
+func parseArgs(arguments []string, args *args) int {
+	// By default, [flag.Parse] emits parsing errors without:
+	//   - "error: " before the error message
+	//   - A blank line betweeen the error message and the usage text
+	// These are minor annoyances but make the command line interface inconsistent. We there
+	// construct our own flag set to control what is emitted.
+
+	// Use [flag.ContinueOnError] error handling so that [flagSet.Parse] returns parsing errors to
+	// us instead of exiting. We can then prefix them with "error: " and print a blank line where
+	// required.
+	flagSet := newFlagSet("pg", flag.ContinueOnError)
+	// Discard all output until required (when we call [flagSet.PrintDefaults]). [flagSet.Parse]
+	// emits parsing errors through [flagSet.Output], so we need to suppress this since
+	// we're going to be emitting these errors ourself.
+	flagSet.SetOutput(io.Discard)
+
+	defaultSessionsDir, err := defaultSessionsDir()
+	if err != nil {
+		return errorExit(err)
+	}
+
+	setEditorAndArgs := func(s string) error {
+		fields := strings.Fields(strings.TrimSpace(s))
+		if len(fields) == 0 {
+			return fmt.Errorf("must not be empty")
+		}
+		args.Editor = fields[0]
+		args.EditorArgs = fields[1:]
+		return nil
+	}
+
+	const (
+		verticalDesc        = "Split the window vertically instead of horizontally."
+		resultsPaneSizeDesc = "Results pane `size` in lines/columns, or a percentage if followed by '%'.\n"
+		editorDesc          = "Shell `command` to open the editor." + `
+For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template
+entrypoint is opened at the start line defined by the template.
+(default "vi")`
+		sessionsDirDesc      = "Named sessions `directory`.\n"
+		completionScriptDesc = "Generate a `shell` completion script for bash, zsh, or fish." + `
+Example usage:
+    source <(pg -completion-script bash)
+    source <(pg -completion-script zsh)
+    pg -completion-script fish | source`
+		helpDesc = "Print help message."
+	)
+
+	flagSet.BoolVar(&args.Vertical, "vertical", false, verticalDesc)
+	args.ResultsPaneSize = session.TmuxPaneSize("35%")
+	flagSet.VarWithEnvVar(&args.ResultsPaneSize, "results-pane-size", "PG_RESULTS_PANE_SIZE", resultsPaneSizeDesc)
+	args.Editor = "vi"
+	flagSet.FuncWithEnvVar("editor", "EDITOR", editorDesc, setEditorAndArgs)
+	flagSet.StringVarWithEnvVar(&args.SessionsDir, "sessions-dir", sessionsDirEnvVar, defaultSessionsDir, sessionsDirDesc)
+	completionScriptShell := new(shell)
+	flagSet.Var(completionScriptShell, "completion-script", completionScriptDesc)
+	help := flagSet.Bool("help", false, helpDesc)
+
+	printUsage := func() {
+		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Options:")
+		flagSet.SetOutput(os.Stderr) // Unsuppress output for [flagSet.PrintDefaults]
+		flagSet.PrintDefaults()
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set and valid.")
+	}
+	usageErrorf := func(msg string, a ...any) int {
+		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
+		printUsage()
+		return usageErrorExitStatus
+	}
+
+	if err := flagSet.Parse(arguments); err != nil {
+		return usageErrorf("%s", err)
+	}
+
+	if *help {
+		printUsage()
+		return 0
+	}
+
+	if *completionScriptShell != 0 {
+		if flagSet.NFlag() > 1 || flagSet.NArg() > 0 {
+			return usageErrorf("-completion-script flag must be provided on its own")
+		}
+		completionDescs := flagSet.CompletionDescriptions()
+		completionScript, err := completionScript(completionDescs, *completionScriptShell)
+		if err != nil {
+			return errorExit(err)
+		}
+		fmt.Print(completionScript)
+		return 0
+	}
+
+	if args.TemplateName = flagSet.Arg(0); args.TemplateName == "" {
+		return usageErrorf("template name not provided")
+	}
+	args.SessionName = flagSet.Arg(1)
+	if flagSet.NArg() > 2 {
+		return usageErrorf("unexpected arguments: %s", strings.Join(flagSet.Args()[2:], ", "))
+	}
+
+	return -1
 }
 
 func defaultSessionsDir() (string, error) {
@@ -287,10 +323,10 @@ func shellQuote(arg string) string {
 	return fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", `'\''`))
 }
 
-// resultsCLI runs the command line interface for the __results subcommand and returns the exit
+// runResultsCLI runs the command line interface for the __results subcommand and returns the exit
 // status.
 // The __results subcommand runs in the results pane and executes the entrypoint on save.
-func resultsCLI(ctx context.Context, args []string) int {
+func runResultsCLI(ctx context.Context, args []string) int {
 	if len(args) != 2 {
 		fmt.Fprintln(os.Stderr, "Usage: pg __results <session-dir> <entrypoint>")
 		return usageErrorExitStatus
@@ -303,10 +339,10 @@ func resultsCLI(ctx context.Context, args []string) int {
 	return 0
 }
 
-// completeCLI runs the command line interface for the __complete subcommand and returns the exit
+// runCompleteCLI runs the command line interface for the __complete subcommand and returns the exit
 // status.
 // The __complete subcommand prints completions for templates and sessions.
-func completeCLI(args []string) int {
+func runCompleteCLI(args []string) int {
 	flagSet := flag.NewFlagSet(completeSubcmd, flag.ExitOnError)
 	shell := new(shell)
 	flagSet.Var(shell, "shell", "Shell to generate completions for")
