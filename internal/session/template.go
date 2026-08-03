@@ -63,7 +63,7 @@ func (t template) EntrypointContents() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("making entrypoint contents: %s", err)
 	}
-	defer f.Close() // nolint:errcheck // Nothing useful we can do with this error
+	defer func() { _ = f.Close() }() // Error not useful after reading
 	contents, err := io.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("making entrypoint contents: %s", err)
@@ -168,7 +168,7 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 	if err != nil {
 		return template{}, fmt.Errorf("loading template %q: reading entrypoint start line: %s", name, err)
 	}
-	defer f.Close() // nolint:errcheck // There's nothing we can do with this error
+	defer func() { _ = f.Close() }() // Error not useful after reading
 	scanner := bufio.NewScanner(f)
 	line := 1
 	entrypointStartLine := 0

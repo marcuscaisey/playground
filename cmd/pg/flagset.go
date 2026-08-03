@@ -171,11 +171,11 @@ func (fs *flagSet) Var(value flag.Value, name string, usage string) {
 }
 
 // VarWithEnvVar is like [flag.FlagSet.Var] but uses the given environment variable as a default
-// value when set and valid ([flag.Value.Set]).
+// value when set and valid.
 func (fs *flagSet) VarWithEnvVar(value flag.Value, name string, envVar string, usage string) {
 	fs.Var(value, name, usage)
 	if envValue := os.Getenv(envVar); envValue != "" {
-		_ = value.Set(envValue) // We can't do anything sensible at this point
+		_ = value.Set(envValue)
 	}
 	fs.flagEnvVars[name] = envVar
 }

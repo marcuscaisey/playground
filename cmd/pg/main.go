@@ -84,7 +84,7 @@ func runMainCLI(ctx context.Context, a []string) (status int) {
 		// If there was an error, keep the anonymous session directory around so its contents can be
 		// recovered
 		if status == 0 && ses.Name == "" && ses.Dir != "" {
-			_ = os.RemoveAll(ses.Dir) // This is a temp directory, so it's fine if this fails
+			_ = os.RemoveAll(ses.Dir) // Only a temporary directory
 		}
 	}()
 
@@ -357,7 +357,7 @@ func runCompleteCLI(args []string) int {
 	}
 	flagSet.Usage = printUsage
 
-	_ = flagSet.Parse(args) // Parse will exit on any error
+	_ = flagSet.Parse(args) // Parse exits on any error
 
 	if flagSet.NArg() < 1 {
 		return usageError()

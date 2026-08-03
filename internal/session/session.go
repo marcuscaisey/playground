@@ -315,7 +315,7 @@ func (s *Session) setupNamedSessionDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("setting up session directory: creating staging directory: %s", err)
 	}
-	defer os.RemoveAll(stagingDir) // nolint:errcheck // It's fine if this fails as it's a hidden directory
+	defer func() { _ = os.RemoveAll(stagingDir) }() // Fine if hidden directory is left hanging around
 	if err := s.template.Initialise(stagingDir); err != nil {
 		return "", err
 	}
@@ -465,7 +465,7 @@ func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPane
 	attachExited := make(chan struct{})
 	go func() {
 		defer close(attachExited)
-		_ = attachCmd.Wait() // If there is an error, it should be logged out anyway
+		_ = attachCmd.Wait() // Errors should be logged to stderr
 	}()
 
 	type cmdOutputResult struct {
