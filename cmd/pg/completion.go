@@ -197,8 +197,8 @@ func formatCompletion(value string, description string, shell shell) string {
 	switch shell {
 	case shellZsh:
 		value := strings.ReplaceAll(value, ":", `\:`)
-		// Empty description results in an empty description shown. No description results in no
-		// description shown.
+		// A trailing : results in an empty description being shown, so only append it if we
+		// actually have a description
 		if description != "" {
 			return value + ":" + description
 		} else {

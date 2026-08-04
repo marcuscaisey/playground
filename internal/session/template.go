@@ -118,7 +118,7 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 		if err != nil {
 			return template{}, fmt.Errorf("loading template %q: checking built-in templates directory: %s", name, err)
 		}
-		// [fs.Sub] doesn't check whether the dir exists, so we need to
+		// [fs.Sub] doesn't check whether the dir exists, so we need to do it ourselves
 		builtinTemplateExists, err := fileExistsFS(templateFS, ".")
 		if err != nil {
 			return template{}, fmt.Errorf("loading template %q: checking built-in templates directory: %s", name, err)

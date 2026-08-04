@@ -1,5 +1,4 @@
-* Check that comments describe why and what
-* Check that we're wrapping context errors?
+* Check doc links
 * Attribution for copied sources (flagSet, humanDuration)?
 * Allow shell script to use any shebang
 * Allow sessions for templates which have been deleted?

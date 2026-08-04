@@ -30,7 +30,8 @@ const (
 
 // runCLI runs the pg command line interface and returns its exit status.
 func runCLI() int {
-	// SIGHUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
+	// SIGHUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands. e.g. we'll
+	// receive it if the tmux pane that we're running in gets killed.
 	ctx, stop := signalContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	defer stop()
 	cmdArgs := os.Args[1:] // Drop program name
@@ -53,7 +54,7 @@ func runCLI() int {
 func signalContext(parent context.Context, signals ...os.Signal) (ctx context.Context, stop context.CancelFunc) {
 	// [signal.NotifyContext] cancels the context with a cause error describing the received signal,
 	// but it can't be handled programatically because it's not exported. Instead, we use
-	// [signal.Notify] instead and store the received signal for later.
+	// [signal.Notify] and store the received signal for later.
 	// See: https://github.com/golang/go/issues/60756
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, signals...)
@@ -122,7 +123,9 @@ func runMainCLI(ctx context.Context, a []string) (status int) {
 		// If there was an error, keep the anonymous session directory around so its contents can be
 		// recovered
 		if status == 0 && ses.Name == "" && ses.Dir != "" {
-			_ = os.RemoveAll(ses.Dir) // Only a temporary directory
+			// Anonymous session directory is temporary so even if we fail to clean it up, it should
+			// get cleaned up by the OS at some point.
+			_ = os.RemoveAll(ses.Dir)
 		}
 	}()
 
@@ -219,7 +222,7 @@ func parseArgs(arguments []string, args *args) int {
 	// By default, [flag.Parse] emits parsing errors without:
 	//   - "error: " before the error message
 	//   - A blank line betweeen the error message and the usage text
-	// These are minor annoyances but make the command line interface inconsistent. We there
+	// These are minor annoyances but make the command line interface inconsistent. We therefore
 	// construct our own flag set to control what is emitted.
 
 	// Use [flag.ContinueOnError] error handling so that [flagSet.Parse] returns parsing errors to

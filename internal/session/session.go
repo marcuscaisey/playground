@@ -248,7 +248,7 @@ func (s *Session) Run(ctx context.Context, resultsPaneSize TmuxPaneSize, vertica
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	// Best effort as the last opened time is only depended upon during tab completion
+	// Write is best effort as the last opened time is only depended upon during tab completion
 	_ = os.WriteFile(filepath.Join(s.Dir, sessionLastOpenedMarker), nil, 0o666)
 
 	// Ensure that commands which rely on the current directory (like tmux split-window -c
@@ -316,7 +316,8 @@ func (s *Session) setupNamedSessionDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("setting up session directory: creating staging directory: %s", err)
 	}
-	defer func() { _ = os.RemoveAll(stagingDir) }() // Fine if hidden directory is left hanging around
+	// We can tolerate this directory hanging around since it's hidden
+	defer func() { _ = os.RemoveAll(stagingDir) }()
 	if err := s.template.Initialise(stagingDir); err != nil {
 		return "", err
 	}
@@ -469,7 +470,7 @@ func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPane
 	attachExited := make(chan struct{})
 	go func() {
 		defer close(attachExited)
-		_ = attachCmd.Wait() // Errors should be logged to stderr
+		_ = attachCmd.Wait() // Any error we're ignoring should have been logged to stderr
 	}()
 
 	type cmdOutputResult struct {
@@ -503,9 +504,12 @@ func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPane
 	if err != nil && !strings.Contains(err.Error(), "can't find session") {
 		return fmt.Errorf("running session: killing tmux session: %s", err)
 	}
-	<-attachExited // If it hasn't already, killing the session will cause attach to exit
+	// If it hasn't already, killing the session will cause attach to exit. We wait for it to exit
+	// since it's in the foreground.
+	<-attachExited
 
-	// editorExitStatus == "" implies that the editor didn't exit on its own accord
+	// editorExitStatus == "" implies that the editor didn't exit on its own accord, so we don't
+	// class this as an editor error.
 	if editorExitStatus != "" && editorExitStatus != "0" {
 		return fmt.Errorf("running session: %w", ErrEditorError)
 	}
