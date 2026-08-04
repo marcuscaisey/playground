@@ -30,9 +30,8 @@ const (
 
 // runCLI runs the pg command line interface and returns its exit status.
 func runCLI() int {
-	// SIGUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	ctx, stop := signalContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	// SIGHUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
+	ctx, stop := signalContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	defer stop()
 	cmdArgs := os.Args[1:] // Drop program name
 	if len(cmdArgs) > 1 {
