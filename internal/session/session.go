@@ -326,7 +326,7 @@ func (s *Session) setupNamedSessionDir() (string, error) {
 			// If the directory already exists, there must have been a racing process trying to
 			// create the same session. We can just behave as if the directory had already existed
 			// when we checked and ignore the error.
-			return "", nil
+			return sessionDir, nil
 		}
 		return "", fmt.Errorf("setting up session directory: moving into place: %s", err)
 	}
