@@ -64,7 +64,7 @@ import (
 type Session struct {
 	Name string // Name of the session; if empty, the session is anonymous
 	// Directory containing the session's files.
-	// Dir is empty until its populated as a result of calling [session.Run].
+	// Dir is empty until its populated as a result of calling [Session.Run].
 	// Dir != "" implies that the directory has been created.
 	Dir          string
 	TemplateName string // Name of the session's template
@@ -530,7 +530,6 @@ func (s *Session) createResultsPane(ctx context.Context, paneID string, size Tmu
 		splitFlag,
 		"-l", string(size),
 		"-P", "-F", "#{pane_id}",
-		// See [resultsCLI] for the results subcommand
 		s.pgPath, "__results", s.Dir, s.template.Entrypoint)
 	if err != nil {
 		return "", fmt.Errorf("creating results pane: %s", err)

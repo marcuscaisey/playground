@@ -230,8 +230,8 @@ func parseArgs(arguments []string, args *args) int {
 	// required.
 	flagSet := newFlagSet("pg", flag.ContinueOnError)
 	// Discard all output until required (when we call [flagSet.PrintDefaults]). [flagSet.Parse]
-	// emits parsing errors through [flagSet.Output], so we need to suppress this since
-	// we're going to be emitting these errors ourself.
+	// emits parsing errors through the output, so we need to suppress this since we're going to be
+	// emitting these errors ourself.
 	flagSet.SetOutput(io.Discard)
 
 	defaultSessionsDir, err := defaultSessionsDir()
