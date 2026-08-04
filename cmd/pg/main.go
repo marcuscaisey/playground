@@ -32,6 +32,7 @@ const (
 func runCLI() int {
 	// SIGUP is sent by tmux for the kill-pane, kill-window, kill-session, etc commands
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	ctx, stop := signalContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	cmdArgs := os.Args[1:] // Drop program name
 	if len(cmdArgs) > 1 {
@@ -45,6 +46,44 @@ func runCLI() int {
 		}
 	}
 	return runMainCLI(ctx, cmdArgs)
+}
+
+// signalContext is like [signal.NotifyContext] except the stop function sends the process the
+// received signal (if any) so that the parent process can detect that the process was killed by a
+// signal and by which one.
+func signalContext(parent context.Context, signals ...os.Signal) (ctx context.Context, stop context.CancelFunc) {
+	// [signal.NotifyContext] cancels the context with a cause error describing the received signal,
+	// but it can't be handled programatically because it's not exported. Instead, we use
+	// [signal.Notify] instead and store the received signal for later.
+	// See: https://github.com/golang/go/issues/60756
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, signals...)
+
+	ctx, cancel := context.WithCancelCause(parent)
+	var receivedSignal os.Signal
+	go func() {
+		select {
+		case receivedSignal = <-sigc:
+			cancel(errors.New(receivedSignal.String()))
+		case <-ctx.Done():
+		}
+	}()
+
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		panic(fmt.Errorf("failed to find process: %s", err))
+	}
+	return ctx, func() {
+		cancel(nil)
+		signal.Stop(sigc)
+		if receivedSignal == nil {
+			return
+		}
+		if err := proc.Signal(receivedSignal); err != nil {
+			fmt.Fprintf(os.Stderr, "error: sending process signal %q: %s\n", receivedSignal, err)
+		}
+		select {}
+	}
 }
 
 // runMainCLI runs the main command line interface and returns the exit status.
@@ -89,6 +128,10 @@ func runMainCLI(ctx context.Context, a []string) (status int) {
 	}()
 
 	if err := ses.Run(ctx, args.ResultsPaneSize, args.Vertical, args.Editor, args.EditorArgs...); err != nil {
+		if cause := context.Cause(ctx); cause != nil {
+			fmt.Fprintln(os.Stderr, cause)
+			return generalExitStatus
+		}
 		if errors.Is(err, session.ErrEditorError) {
 			// This is expected when the user doesn't want to be prompted to save their anonymous
 			// session. If there was an actual error, the editor will log it to stdout/stderr

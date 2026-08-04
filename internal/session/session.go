@@ -412,9 +412,9 @@ func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPane
 	editorPaneCmds := []string{
 		fmt.Sprintf(`trap 'tmux wait-for -S "%s-$TMUX_PANE"' EXIT`, editorPaneExitedSignalPrefix),
 		"$@",
-		// Only record the exit status if the editor exited on its own accord. If bash's process
-		// group is terminated by a signal (e.g. when tmux sends SIGHUP after a kill-pane), then
-		// this command won't be executed.
+		// Only record the exit status if the editor exited on its own accord. If the foreground
+		// process group is terminated by a signal (e.g. when tmux sends SIGHUP after a kill-pane),
+		// then this command won't be executed.
 		fmt.Sprintf(`tmux set-option -t "$TMUX_PANE" %s "$?"`, editorExitStatusOpt),
 	}
 	editorPaneScript := strings.Join(editorPaneCmds, "; ")
