@@ -53,6 +53,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -368,6 +369,9 @@ var ErrEditorError = fmt.Errorf("editor exited with non-zero status")
 func (s *Session) runFromTmuxPane(ctx context.Context, paneID string, resultsPaneSize TmuxPaneSize, vertical bool, editor string, editorArgs ...string) error {
 	editorCmd := cmdWithStdio(ctx, editor, editorArgs...)
 	editorCmd.Dir = s.Dir
+	editorCmd.Cancel = func() error {
+		return editorCmd.Process.Signal(syscall.SIGTERM) // Allow the editor to shutdown gracefully
+	}
 	if err := editorCmd.Start(); err != nil {
 		return fmt.Errorf("running session: opening editor: %s", err)
 	}

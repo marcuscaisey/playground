@@ -1,5 +1,4 @@
 * Check that comments describe why and what
-* Gracefully terminate child processes
 * Check that we're wrapping context errors?
 * Do we handle SIGINT, SIGTERM, SIGHUP correctly?
 * Attribution for copied sources (flagSet, humanDuration)?

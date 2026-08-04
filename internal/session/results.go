@@ -90,10 +90,11 @@ func startRunScript(ctx context.Context, sessionDir string) (stop func(), err er
 
 	cmd := cmdWithStdio(cmdCtx, "bash", runScriptFilename)
 	cmd.Dir = sessionDir
-	// Run bash in a process group so that we can kill it and any child processes spawned by run.sh.
+	// Run bash in a process group so that we can signal it and any child processes spawned by
+	// run.sh (as long as they themselves are in the process group).
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	}
 
 	fmt.Print(ansiClearScreen)
