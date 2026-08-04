@@ -31,15 +31,19 @@ type template struct {
 // Initialise populates a directory with the template's files, ready for a session to be run.
 func (t template) Initialise(dir string) error {
 	if err := os.CopyFS(dir, t.fs); err != nil {
-		return fmt.Errorf("setting up session directory: %s", err)
+		return fmt.Errorf("initialising session directory: %s", err)
 	}
 
 	entrypointContents, err := t.EntrypointContents()
 	if err != nil {
-		return fmt.Errorf("setting up session directory: %s", err)
+		return fmt.Errorf("initialising session directory: %s", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, t.Entrypoint), entrypointContents, 0o666); err != nil {
-		return fmt.Errorf("setting up session directory: writing entrypoint: %s", err)
+		return fmt.Errorf("initialising session directory: writing entrypoint: %s", err)
+	}
+
+	if err := os.Chmod(filepath.Join(dir, runScriptFilename), 0o766); err != nil {
+		return fmt.Errorf("initialising session directory: %s", err)
 	}
 
 	// From the [embed] docs: "Patterns must not match files outside the package's module, such as
@@ -50,7 +54,7 @@ func (t template) Initialise(dir string) error {
 		path := filepath.Join(dir, "go.mod")
 		data := []byte("module playground\n")
 		if err := os.WriteFile(path, data, 0o666); err != nil {
-			return fmt.Errorf("setting up session directory: writing built-in go template go.mod: %s", err)
+			return fmt.Errorf("initialising session directory: writing built-in go template go.mod: %s", err)
 		}
 	}
 	return nil

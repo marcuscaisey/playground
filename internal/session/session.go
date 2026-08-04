@@ -32,7 +32,7 @@
 //     whitespace) are erased when the file is copied into the session directory and, if possible,
 //     the cursor is placed on it when the entrypoint is opened for the first time. All __CURSOR__
 //     appearances after the first one are ignored.
-//   - A "run.sh" file, the run script executed as "bash run.sh".
+//   - A "run.sh" file, the run script executed as "./run.sh".
 //   - Any other files needed to run the session.
 //
 // A number of built-in templates are provided by the [templates] package. Users can use their own
@@ -161,8 +161,6 @@ func validateSessionName(name string) error {
 var (
 	// ErrTmuxNotFound indicates that tmux was not found in $PATH.
 	ErrTmuxNotFound = fmt.Errorf("tmux not found in $PATH")
-	// ErrBashNotFound indicates that bash was not found in $PATH.
-	ErrBashNotFound = fmt.Errorf("bash not found in $PATH")
 )
 
 // EditorNotFoundError records that an editor was not found in $PATH.
@@ -219,7 +217,6 @@ var editorNewSessionExtraArgs = map[string]string{
 //
 // If the editor is not found in $PATH, the returned error wraps an [*EditorNotFoundError].
 // If tmux is not found in $PATH, the returned error wraps [ErrTmuxNotFound].
-// If bash is not found in $PATH, the returned error wraps [ErrBashNotFound].
 // If the editor exits with a non-zero status, the returned error wraps [ErrEditorError].
 func (s *Session) Run(ctx context.Context, resultsPaneSize TmuxPaneSize, vertical bool, editor string, editorArgs ...string) (err error) {
 	// Check these here so that we don't find out after we've created:
@@ -234,9 +231,6 @@ func (s *Session) Run(ctx context.Context, resultsPaneSize TmuxPaneSize, vertica
 	}
 	if _, err := exec.LookPath("tmux"); err != nil {
 		return fmt.Errorf("running session: %w", ErrTmuxNotFound)
-	}
-	if _, err := exec.LookPath("bash"); err != nil {
-		return fmt.Errorf("running session: %w", ErrBashNotFound)
 	}
 
 	if s.Name != "" {
@@ -408,10 +402,10 @@ func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPane
 	// tmux is the one starting the editor process so we can't wait for it to exit in the same way
 	// since it's not our child.
 	//
-	// Instead of starting the editor pane with just the editor command, we wrap it in a bash script
-	// which uses "tmux wait-for -S $signal" to send a signal which can be received by a separate
-	// call to "tmux wait-for $signal". We also populate a session option with the editor's exit
-	// status once it exits which we can read once we receive the signal.
+	// Instead of starting the editor pane with just the editor command, we wrap it in a shell
+	// script which uses "tmux wait-for -S $signal" to send a signal which can be received by a
+	// separate call to "tmux wait-for $signal". We also populate a session option with the editor's
+	// exit status once it exits which we can read once we receive the signal.
 	const editorPaneExitedSignalPrefix = "pg-editor-pane-exited"
 	const editorExitStatusOpt = "@pg-editor-exit-status"
 	editorPaneCmds := []string{
@@ -433,7 +427,7 @@ func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPane
 		"-c", s.Dir,
 		"-x", strconv.Itoa(x), "-y", strconv.Itoa(y),
 		"-P", "-F", "#{session_id} #{pane_id}",
-		"bash", "-c", editorPaneScript, "pg-editor", editor,
+		"sh", "-c", editorPaneScript, "pg-editor", editor,
 	}
 	newSessionArgs = append(newSessionArgs, editorArgs...)
 	sessionIDEditorPaneID, err := cmdOutput(ctx, "tmux", newSessionArgs...)

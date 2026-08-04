@@ -146,9 +146,6 @@ func runMainCLI(ctx context.Context, a []string) (status int) {
 		if errors.Is(err, session.ErrTmuxNotFound) {
 			return errorExitf("tmux not found on $PATH")
 		}
-		if errors.Is(err, session.ErrBashNotFound) {
-			return errorExitf("bash not found on $PATH")
-		}
 		return errorExit(err)
 	}
 

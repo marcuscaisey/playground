@@ -1,5 +1,5 @@
+* Check shell template file extensions
 * Attribution for copied sources (flagSet, humanDuration)?
-* Allow shell script to use any shebang
 * Allow sessions for templates which have been deleted?
 * Remove __results subcommand
 * Include hints to install missing dependencies in error messages
@@ -11,6 +11,6 @@
     * Motiviation
     * Demo
     * Mention https://labix.org/hsandbox as inspiration
-    * Dependencies -- bash, tmux
+    * Dependencies -- tmux
     * No windows support
 * Build binary for all platforms (GoReleaser?)

@@ -77,7 +77,7 @@ func PrintResults(ctx context.Context, sessionDir string, entrypoint string) (er
 }
 
 // startRunScript starts execution of a session's run script and returns a function to stop it.
-// The run script is executed as "bash run.sh" from the session directory.
+// The run script is executed as "./run.sh" from the session directory.
 // The returned function blocks until execution has been stopped and is safe to be called after
 // execution has stopped.
 func startRunScript(ctx context.Context, sessionDir string) (stop func(), err error) {
@@ -88,11 +88,11 @@ func startRunScript(ctx context.Context, sessionDir string) (stop func(), err er
 		}
 	}()
 
-	cmd := cmdWithStdio(cmdCtx, "bash", runScriptFilename)
+	cmd := cmdWithStdio(cmdCtx, "./"+runScriptFilename)
 	cmd.Dir = sessionDir
-	// Run bash in a process group so that we can signal it and any child processes spawned by
-	// run.sh as long as they're also in the process group (which should be the case for any
-	// commands executed by the script).
+	// Run the script in a process group so that we can signal it and any spawned child processes as
+	// long as they're also in the process group (which should be the case for any commands executed
+	// by the script).
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
