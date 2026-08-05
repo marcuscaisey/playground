@@ -159,9 +159,13 @@ func completeSessions(templateName string, sessionsDir string, shell shell) erro
 	return nil
 }
 
-// humanDuration returns a human-readable approximation of a duration (eg. "About a minute",
-// "4 hours ago", etc.).
-// Copied from github.com/docker/go-units.
+// humanDuration returns a human-readable approximation of a duration
+// (eg. "About a minute", "4 hours ago", etc.).
+// Adapted from github.com/docker/go-units's units.HumanDuration:
+// https://github.com/docker/go-units/blob/2bd057e7d15e38a5d66bd084ffe3619027c7b8b6/duration.go.
+// Copyright 2015 Docker, Inc.
+// Apache License 2.0; see LICENSES/github.com/docker/go-units/LICENSE.
+// Modified from the original.
 func humanDuration(d time.Duration) string {
 	if seconds := int(d.Seconds()); seconds < 1 {
 		return "Less than a second"

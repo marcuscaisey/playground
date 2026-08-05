@@ -38,8 +38,11 @@ func (fs *flagSet) SetOutput(output io.Writer) { fs.base.SetOutput(output) }
 
 // PrintDefaults is like [flag.FlagSet.PrintDefaults] except flags are printed in the order they
 // were defined.
+// Adapted from Go's flag.FlagSet.PrintDefaults:
+// https://github.com/golang/go/blob/go1.26.5/src/flag/flag.go.
+// Copyright 2009 The Go Authors.
+// BSD 3-Clause License; see LICENSES/github.com/golang/go/LICENSE.
 func (fs *flagSet) PrintDefaults() {
-	// Function body copied from [flag.FlagSet.PrintDefaults] and modified
 	var isZeroValueErrs []error
 	for _, f := range fs.defOrderedFlags {
 		var b strings.Builder
@@ -93,6 +96,10 @@ func (fs *flagSet) PrintDefaults() {
 
 // isZeroValue determines whether the string represents the zero
 // value for a flag.
+// Adapted from Go's flag.isZeroValue:
+// https://github.com/golang/go/blob/go1.26.5/src/flag/flag.go.
+// Copyright 2009 The Go Authors.
+// BSD 3-Clause License; see LICENSES/github.com/golang/go/LICENSE.
 func isZeroValue(f *flag.Flag, value string) (ok bool, err error) {
 	// Build a zero value of the flag's Value type, and see if the
 	// result of calling its String method equals the value passed in.

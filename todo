@@ -1,5 +1,5 @@
-* Attribution for copied sources (flagSet, humanDuration)?
-* Allow sessions for templates which have been deleted?
+* Exec in run.sh?
+* Check that sh exists?
 * Remove __results subcommand
 * Include hints to install missing dependencies in error messages
 * Decide when to show full / partial help text
@@ -10,6 +10,6 @@
     * Motiviation
     * Demo
     * Mention https://labix.org/hsandbox as inspiration
-    * Dependencies -- tmux
+    * Dependencies -- tmux, sh
     * No windows support
 * Build binary for all platforms (GoReleaser?)
