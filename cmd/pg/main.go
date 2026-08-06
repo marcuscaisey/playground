@@ -237,7 +237,9 @@ func parseArgs(arguments []string, args *args) int {
 	}
 
 	const (
-		verticalDesc        = "Split the window vertically instead of horizontally."
+		verticalDesc = `Split the window vertically instead of horizontally.
+Valid values: 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
+`
 		resultsPaneSizeDesc = "Results pane `size` in lines/columns, or a percentage if followed by '%'.\n"
 		editorDesc          = "Shell `command` to open the editor." + `
 For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template
@@ -252,7 +254,7 @@ Example usage:
 		helpDesc = "Print help message."
 	)
 
-	flagSet.BoolVar(&args.Vertical, "vertical", false, verticalDesc)
+	flagSet.BoolVarWithEnvVar(&args.Vertical, "vertical", "PG_VERTICAL", false, verticalDesc)
 	args.ResultsPaneSize = session.TmuxPaneSize("35%")
 	flagSet.VarWithEnvVar(&args.ResultsPaneSize, "results-pane-size", "PG_RESULTS_PANE_SIZE", resultsPaneSizeDesc)
 	args.Editor = "vi"

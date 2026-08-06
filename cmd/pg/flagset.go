@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -77,9 +78,11 @@ func (fs *flagSet) PrintDefaults() {
 			} else {
 				fmt.Fprintf(&b, "(default %v)", f.DefValue)
 			}
-		}
-		if envVar, ok := fs.flagEnvVars[f.Name]; ok {
-			fmt.Fprintf(&b, " [$%s]", envVar)
+			if envVar, ok := fs.flagEnvVars[f.Name]; ok {
+				fmt.Fprintf(&b, " [$%s]", envVar)
+			}
+		} else if envVar, ok := fs.flagEnvVars[f.Name]; ok {
+			fmt.Fprintf(&b, "[$%s]", envVar)
 		}
 		_, _ = fmt.Fprint(fs.base.Output(), b.String(), "\n")
 	}
@@ -137,10 +140,17 @@ func (fs *flagSet) NArg() int { return fs.base.NArg() }
 // Args is the same as [flag.FlagSet.Args].
 func (fs *flagSet) Args() []string { return fs.base.Args() }
 
-// BoolVar is the same as [flag.FlagSet.BoolVar].
-func (fs *flagSet) BoolVar(p *bool, name string, value bool, usage string) {
+// BoolVarWithEnvVar is like [flag.FlagSet.BoolVar] but uses the given environment variable as a
+// default value when set and valid.
+func (fs *flagSet) BoolVarWithEnvVar(p *bool, name string, envVar string, value bool, usage string) {
 	fs.base.BoolVar(p, name, value, usage)
+	if envValue := os.Getenv(envVar); envValue != "" {
+		if b, err := strconv.ParseBool(envValue); err == nil {
+			*p = b
+		}
+	}
 	fs.defOrderedFlags = append(fs.defOrderedFlags, fs.base.Lookup(name))
+	fs.flagEnvVars[name] = envVar
 }
 
 // Bool is the same as [flag.FlagSet.Bool].

@@ -1,9 +1,9 @@
-* Add $PG_VERTICAL fallback for -vertical flag
+* Add more languages
+* Man page
 * Include hints to install missing dependencies in error messages
 * Decide when to show full / partial help text
 * Add more documentation to -help output?
 * Add -version flag
-* Add more languages
 * README
     * Motiviation
     * Demo
