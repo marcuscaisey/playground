@@ -1,4 +1,3 @@
-* Check that sh exists?
 * Remove __results subcommand
 * Include hints to install missing dependencies in error messages
 * Decide when to show full / partial help text

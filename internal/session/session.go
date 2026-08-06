@@ -161,6 +161,8 @@ func validateSessionName(name string) error {
 var (
 	// ErrTmuxNotFound indicates that tmux was not found in $PATH.
 	ErrTmuxNotFound = fmt.Errorf("tmux not found in $PATH")
+	// ErrShNotFound indicates that sh was not found in $PATH.
+	ErrShNotFound = fmt.Errorf("sh not found in $PATH")
 )
 
 // EditorNotFoundError records that an editor was not found in $PATH.
@@ -217,22 +219,9 @@ var editorNewSessionExtraArgs = map[string]string{
 //
 // If the editor is not found in $PATH, the returned error wraps an [*EditorNotFoundError].
 // If tmux is not found in $PATH, the returned error wraps [ErrTmuxNotFound].
+// If sh is not found in $PATH, the returned error wraps [ErrShNotFound].
 // If the editor exits with a non-zero status, the returned error wraps [ErrEditorError].
 func (s *Session) Run(ctx context.Context, resultsPaneSize TmuxPaneSize, vertical bool, editor string, editorArgs ...string) (err error) {
-	// Check these here so that we don't find out after we've created:
-	// - The results pane in the current tmux session -- killing it immediately because of the error
-	//   is jarring.
-	// - A new tmux session -- the error will be surfaced inside the session and then lost after the
-	//   session is killed.
-	if filepath.Base(editor) == editor {
-		if _, err := exec.LookPath(editor); err != nil {
-			return fmt.Errorf("running session: %w", &EditorNotFoundError{Editor: editor})
-		}
-	}
-	if _, err := exec.LookPath("tmux"); err != nil {
-		return fmt.Errorf("running session: %w", ErrTmuxNotFound)
-	}
-
 	if s.Name != "" {
 		s.Dir, err = s.setupNamedSessionDir()
 	} else {
@@ -361,13 +350,25 @@ func (s *Session) setupAnonSessionDir(template template) (string, error) {
 var ErrEditorError = fmt.Errorf("editor exited with non-zero status")
 
 // runFromTmuxPane runs the session using the given pane as the editor pane.
+// If the editor is not found in $PATH, the returned error wraps an [*EditorNotFoundError].
+// If tmux is not found in $PATH, the returned error wraps [ErrTmuxNotFound].
+// If the editor exits with a non-zero status, the returned error wraps [ErrEditorError].
 func (s *Session) runFromTmuxPane(ctx context.Context, paneID string, resultsPaneSize TmuxPaneSize, vertical bool, editor string, editorArgs ...string) error {
+	// Check this before we open the editor since closing it immediately because of the error could
+	// be jarring.
+	if _, err := exec.LookPath("tmux"); err != nil {
+		return fmt.Errorf("running session: %w", ErrTmuxNotFound)
+	}
+
 	editorCmd := cmdWithStdio(ctx, editor, editorArgs...)
 	editorCmd.Dir = s.Dir
 	editorCmd.Cancel = func() error {
 		return editorCmd.Process.Signal(syscall.SIGTERM) // Allow the editor to shutdown gracefully
 	}
 	if err := editorCmd.Start(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return fmt.Errorf("running session: %w", &EditorNotFoundError{Editor: editor})
+		}
 		return fmt.Errorf("running session: opening editor: %s", err)
 	}
 
@@ -394,7 +395,22 @@ func (s *Session) runFromTmuxPane(ctx context.Context, paneID string, resultsPan
 }
 
 // runFromTmuxPane runs the session in a new tmux session.
+// If the editor is not found in $PATH, the returned error wraps an [*EditorNotFoundError].
+// If tmux is not found in $PATH, the returned error wraps [ErrTmuxNotFound].
+// If sh is not found in $PATH, the returned error wraps [ErrShNotFound].
+// If the editor exits with a non-zero status, the returned error wraps [ErrEditorError].
 func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPaneSize, vertical bool, editor string, editorArgs ...string) error {
+	// Check these before we create the tmux session since the error will be surfaced inside the
+	// session and then lost after it's killed.
+	if filepath.Base(editor) == editor {
+		if _, err := exec.LookPath(editor); err != nil {
+			return fmt.Errorf("running session: %w", &EditorNotFoundError{Editor: editor})
+		}
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		return fmt.Errorf("running session: %w", ErrShNotFound)
+	}
+
 	// Running in a new tmux session is a bit trickier than just running from an existing pane. We
 	// want to know when the editor exits and with which status so that we can kill the tmux session
 	// and report to the caller whether the editor errored. In the existing pane case, we started
@@ -432,6 +448,9 @@ func (s *Session) runInTmuxSession(ctx context.Context, resultsPaneSize TmuxPane
 	newSessionArgs = append(newSessionArgs, editorArgs...)
 	sessionIDEditorPaneID, err := cmdOutput(ctx, "tmux", newSessionArgs...)
 	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return fmt.Errorf("running session: starting tmux session: %w", ErrTmuxNotFound)
+		}
 		return fmt.Errorf("running session: starting tmux session: %s", err)
 	}
 
@@ -626,7 +645,7 @@ func cmdOutput(ctx context.Context, name string, args ...string) (string, error)
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && len(exitErr.Stderr) > 0 {
 			return "", fmt.Errorf("executing %q: %s", cmd, string(bytes.TrimSpace(exitErr.Stderr)))
 		}
-		return "", fmt.Errorf("executing %q: %s", cmd, err)
+		return "", fmt.Errorf("executing %q: %w", cmd, err)
 	}
 	return strings.TrimSpace(string(output)), nil
 }

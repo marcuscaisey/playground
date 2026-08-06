@@ -144,7 +144,10 @@ func runMainCLI(ctx context.Context, a []string) (status int) {
 			return errorExitf("editor %q not found in $PATH", notFoundErr.Editor)
 		}
 		if errors.Is(err, session.ErrTmuxNotFound) {
-			return errorExitf("tmux not found on $PATH")
+			return errorExitf("tmux not found in $PATH")
+		}
+		if errors.Is(err, session.ErrShNotFound) {
+			return errorExitf("sh not found in $PATH")
 		}
 		return errorExit(err)
 	}
