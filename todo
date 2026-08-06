@@ -1,4 +1,4 @@
-* Remove __results subcommand
+* Add $PG_VERTICAL fallback for -vertical flag
 * Include hints to install missing dependencies in error messages
 * Decide when to show full / partial help text
 * Add more documentation to -help output?

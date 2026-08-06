@@ -23,10 +23,7 @@ func main() {
 	os.Exit(runCLI())
 }
 
-const (
-	resultsSubcmd  = "__results"
-	completeSubcmd = "__complete"
-)
+const completeSubcmd = "__complete"
 
 // runCLI runs the pg command line interface and returns its exit status.
 func runCLI() int {
@@ -34,18 +31,12 @@ func runCLI() int {
 	// receive it if the tmux pane that we're running in gets killed.
 	ctx, stop := signalContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	defer stop()
-	cmdArgs := os.Args[1:] // Drop program name
-	if len(cmdArgs) > 1 {
-		subcmd := cmdArgs[0]
-		subcmdArgs := cmdArgs[1:] // Drop subcommand
-		switch subcmd {
-		case resultsSubcmd:
-			return runResultsCLI(ctx, subcmdArgs)
-		case completeSubcmd:
-			return runCompleteCLI(subcmdArgs)
-		}
+	args := os.Args[1:] // Drop program name
+	if len(args) > 0 && args[0] == completeSubcmd {
+		completeArgs := args[1:] // Drop subcommand
+		return runCompleteCLI(completeArgs)
 	}
-	return runMainCLI(ctx, cmdArgs)
+	return runMainCLI(ctx, args)
 }
 
 // signalContext is like [signal.NotifyContext] except the stop function sends the process the
@@ -98,12 +89,8 @@ func runMainCLI(ctx context.Context, a []string) (status int) {
 	if err != nil {
 		return errorExit(err)
 	}
-	pgPath, err := os.Executable()
-	if err != nil {
-		return errorExit(err)
-	}
 
-	ses, err := session.New(args.SessionName, args.TemplateName, args.SessionsDir, userTemplatesDir, pgPath)
+	ses, err := session.New(args.SessionName, args.TemplateName, args.SessionsDir, userTemplatesDir)
 	if err != nil {
 		if errors.Is(err, session.ErrTemplateNotFound) {
 			return errorExitf("template %q not found", args.TemplateName)
@@ -366,22 +353,6 @@ func shellQuote(arg string) string {
 		return arg
 	}
 	return fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", `'\''`))
-}
-
-// runResultsCLI runs the command line interface for the __results subcommand and returns the exit
-// status.
-// The __results subcommand runs in the results pane and executes the entrypoint on save.
-func runResultsCLI(ctx context.Context, args []string) int {
-	if len(args) != 2 {
-		fmt.Fprintln(os.Stderr, "Usage: pg __results <session-dir> <entrypoint>")
-		return usageErrorExitStatus
-	}
-	sessionDir := args[0]
-	entrypoint := args[1]
-	if err := session.PrintResults(ctx, sessionDir, entrypoint); err != nil {
-		return errorExit(err)
-	}
-	return 0
 }
 
 // runCompleteCLI runs the command line interface for the __complete subcommand and returns the exit
