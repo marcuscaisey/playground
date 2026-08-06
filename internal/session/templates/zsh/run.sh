@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-zsh main.zsh
+exec zsh main.zsh

@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-go build -o main . && ./main
+go build -o main . && exec ./main

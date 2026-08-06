@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-bash main.bash
+exec bash main.bash

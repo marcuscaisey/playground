@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-fish main.fish
+exec fish main.fish

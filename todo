@@ -1,4 +1,3 @@
-* Exec in run.sh?
 * Check that sh exists?
 * Remove __results subcommand
 * Include hints to install missing dependencies in error messages

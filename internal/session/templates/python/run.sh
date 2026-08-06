@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-python3 main.py
+exec python3 main.py
