@@ -132,11 +132,16 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 		}
 	}
 
-	const entrypointPattern = "main.*"
-	entrypoints, err := fs.Glob(templateFS, entrypointPattern)
+	entrypointRe := regexp.MustCompile(`^(?i)main\.[a-z]+$`)
+	templateFiles, err := fs.ReadDir(templateFS, ".")
 	if err != nil {
-		// [fs.Glob] can only return [path.ErrBadPattern] so this should never happen
-		return template{}, fmt.Errorf("loading template %q: globbing for entrypoint: %s", name, err)
+		return template{}, fmt.Errorf("loading template %q: finding entrypoint: %s", name, err)
+	}
+	var entrypoints []string
+	for _, file := range templateFiles {
+		if entrypointRe.MatchString(file.Name()) {
+			entrypoints = append(entrypoints, file.Name())
+		}
 	}
 	var entrypoint string
 	switch len(entrypoints) {
@@ -146,7 +151,7 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 		return template{}, fmt.Errorf("loading template %q: %w", name, &InvalidTemplateError{
 			Name:   name,
 			Source: source,
-			Reason: fmt.Sprintf("entrypoint (%q file) is missing", entrypointPattern),
+			Reason: `entrypoint ("main.*" file) is missing`,
 		})
 	default:
 		return template{}, fmt.Errorf("loading template %q: %w", name, &InvalidTemplateError{
