@@ -264,18 +264,18 @@ Example usage:
 	flagSet.Var(completionScriptShell, "completion-script", completionScriptDesc)
 	help := flagSet.Bool("help", false, helpDesc)
 
-	printUsage := func() {
-		fmt.Fprintln(os.Stderr, "Usage: pg [options] <template-name> [<session-name>]")
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Options:")
-		flagSet.SetOutput(os.Stderr) // Unsuppress output for [flagSet.PrintDefaults]
+	printUsage := func(w io.Writer) {
+		_, _ = fmt.Fprintln(w, "Usage: pg [options] <template-name> [<session-name>]")
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "Options:")
+		flagSet.SetOutput(w) // Unsuppress output for [flagSet.PrintDefaults]
 		flagSet.PrintDefaults()
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Environment variables in brackets are used as defaults when set and valid.")
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "Environment variables in brackets are used as defaults when set and valid.")
 	}
 	usageErrorf := func(msg string, a ...any) int {
 		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
-		printUsage()
+		printUsage(os.Stderr)
 		return usageErrorExitStatus
 	}
 
@@ -284,7 +284,7 @@ Example usage:
 	}
 
 	if *help {
-		printUsage()
+		printUsage(os.Stdout)
 		return 0
 	}
 
