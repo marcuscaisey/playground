@@ -10,7 +10,7 @@
 //  1. Populates a directory (the session directory) with the contents of a playground template.
 //  2. Opens the template's entrypoint using the user's editor in a tmux pane (the editor pane). If
 //     the process is in a tmux pane, this is used; otherwise a new tmux session is started.
-//  3. In another tmux pane (the results pane), split from the editor pane, the template's run
+//  3. In another tmux pane (the output pane), split from the editor pane, the template's run
 //     script is executed when either of the template's entrypoint or run script are saved.
 //  4. Closing the editor ends the session.
 //
@@ -212,7 +212,7 @@ var editorNewSessionExtraArgs = map[string]string{
 // Run runs the session in either the process's tmux pane or a new tmux session.
 //
 // vertical determines whether the editor pane is split vertically (true) or horizontally (false) to
-// create the results pane.
+// create the output pane.
 // editor is either a command in $PATH or an absolute path. editorArgs are any extra arguments to be
 // passed to the editor.
 //
@@ -225,7 +225,7 @@ var editorNewSessionExtraArgs = map[string]string{
 // If the editor exits with a non-zero status, the returned error wraps [ErrEditorError].
 func (s *Session) Run(
 	ctx context.Context,
-	resultsPaneSize TmuxPaneSize,
+	outputPaneSize TmuxPaneSize,
 	vertical bool,
 	editor string,
 	editorArgs ...string,
@@ -277,9 +277,9 @@ func (s *Session) Run(
 	editorArgs = append(editorArgs, s.template.Entrypoint)
 
 	if currentPaneID := os.Getenv("TMUX_PANE"); currentPaneID != "" {
-		return s.runFromTmuxPane(ctx, currentPaneID, resultsPaneSize, vertical, editor, editorArgs...)
+		return s.runFromTmuxPane(ctx, currentPaneID, outputPaneSize, vertical, editor, editorArgs...)
 	} else {
-		return s.runInTmuxSession(ctx, resultsPaneSize, vertical, editor, editorArgs...)
+		return s.runInTmuxSession(ctx, outputPaneSize, vertical, editor, editorArgs...)
 	}
 }
 
@@ -364,7 +364,7 @@ var ErrEditorError = fmt.Errorf("editor exited with non-zero status")
 func (s *Session) runFromTmuxPane(
 	ctx context.Context,
 	paneID string,
-	resultsPaneSize TmuxPaneSize,
+	outputPaneSize TmuxPaneSize,
 	vertical bool,
 	editor string,
 	editorArgs ...string,
@@ -397,19 +397,19 @@ func (s *Session) runFromTmuxPane(
 		return fmt.Errorf("running session: opening editor: %s", err)
 	}
 
-	killResultsPane, resultsPaneInput, err := s.createResultsPane(ctx, paneID, resultsPaneSize, vertical)
+	killOutputPane, outputPaneInput, err := s.createOutputPane(ctx, paneID, outputPaneSize, vertical)
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
 	}
 	defer func() {
-		if killErr := killResultsPane(); killErr != nil {
+		if killErr := killOutputPane(); killErr != nil {
 			err = errors.Join(err, fmt.Errorf("running session: %s", killErr))
 		}
 	}()
 
-	writeResultsErr := make(chan error, 1)
+	writeOutputErr := make(chan error, 1)
 	wg.Go(func() {
-		writeResultsErr <- s.writeResults(wgCtx, resultsPaneInput)
+		writeOutputErr <- s.writeOutput(wgCtx, outputPaneInput)
 	})
 
 	editorErr := make(chan error, 1)
@@ -418,7 +418,7 @@ func (s *Session) runFromTmuxPane(
 	})
 
 	select {
-	case err := <-writeResultsErr:
+	case err := <-writeOutputErr:
 		if err != nil {
 			return fmt.Errorf("running session: %s", err)
 		}
@@ -440,7 +440,7 @@ func (s *Session) runFromTmuxPane(
 // If the editor exits with a non-zero status, the returned error wraps [ErrEditorError].
 func (s *Session) runInTmuxSession(
 	ctx context.Context,
-	resultsPaneSize TmuxPaneSize,
+	outputPaneSize TmuxPaneSize,
 	vertical bool,
 	editor string,
 	editorArgs ...string,
@@ -513,7 +513,7 @@ func (s *Session) runInTmuxSession(
 		}
 	}()
 
-	_, resultsPaneInput, err := s.createResultsPane(ctx, editorPaneID, resultsPaneSize, vertical)
+	_, outputPaneInput, err := s.createOutputPane(ctx, editorPaneID, outputPaneSize, vertical)
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
 	}
@@ -525,9 +525,9 @@ func (s *Session) runInTmuxSession(
 		wg.Wait()
 	}()
 
-	writeResultsErr := make(chan error, 1)
+	writeOutputErr := make(chan error, 1)
 	wg.Go(func() {
-		writeResultsErr <- s.writeResults(wgCtx, resultsPaneInput)
+		writeOutputErr <- s.writeOutput(wgCtx, outputPaneInput)
 	})
 
 	attachCmd := exec.CommandContext(wgCtx, "tmux", "attach-session", "-t", sessionID)
@@ -559,7 +559,7 @@ func (s *Session) runInTmuxSession(
 
 	var editorExitStatus string
 	select {
-	case err := <-writeResultsErr:
+	case err := <-writeOutputErr:
 		if err != nil {
 			return fmt.Errorf("running session: %s", err)
 		}
@@ -590,9 +590,9 @@ func (s *Session) runInTmuxSession(
 	return nil
 }
 
-// createResultsPane splits the given pane to create the results pane.
+// createOutputPane splits the given pane to create the output pane.
 // It returns a function to kill it and an [io.Writer] that writes to the pane.
-func (s *Session) createResultsPane(
+func (s *Session) createOutputPane(
 	ctx context.Context,
 	paneID string,
 	size TmuxPaneSize,
@@ -613,50 +613,50 @@ func (s *Session) createResultsPane(
 		"-P", "-F", "#{pane_id}")
 	stdin, err = cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating results pane: %s", err)
+		return nil, nil, fmt.Errorf("creating output pane: %s", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating results pane: %s", err)
+		return nil, nil, fmt.Errorf("creating output pane: %s", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("creating results pane: executing %q: %s", cmd, cmdErr(err))
+		return nil, nil, fmt.Errorf("creating output pane: executing %q: %s", cmd, cmdErr(err))
 	}
 
 	stdoutReader := bufio.NewReader(stdout)
 	output, err := stdoutReader.ReadString('\n')
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating results pane: reading tmux split-window stdout: %s", err)
+		return nil, nil, fmt.Errorf("creating output pane: reading tmux split-window stdout: %s", err)
 	}
-	resultsPaneID := strings.TrimSpace(output)
+	outputPaneID := strings.TrimSpace(output)
 
 	kill = func() error {
 		// Use a fresh context in case the main one has been cancelled
-		_, killErr := cmdOutput(context.Background(), "tmux", "kill-pane", "-t", resultsPaneID)
+		_, killErr := cmdOutput(context.Background(), "tmux", "kill-pane", "-t", outputPaneID)
 		if killErr != nil && !strings.Contains(killErr.Error(), "can't find pane") {
-			return fmt.Errorf("closing results pane: %s", killErr)
+			return fmt.Errorf("closing output pane: %s", killErr)
 		}
 		return nil
 	}
 	return kill, stdin, nil
 }
 
-// writeResults watches the session directory for changes to the entrypoint or run script, executing
-// the run script and writing the results to w when changes occur.
+// writeOutput watches the session directory for changes to the entrypoint or run script, executing
+// the run script and writing the output to w when changes occur.
 // Write errors are not returned.
-func (s *Session) writeResults(ctx context.Context, w io.Writer) (err error) {
+func (s *Session) writeOutput(ctx context.Context, w io.Writer) (err error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return fmt.Errorf("writing results: %s", err)
+		return fmt.Errorf("writing output: %s", err)
 	}
 	defer func() {
 		if closeErr := watcher.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("writing results: closing session directory watcher: %s", closeErr))
+			err = errors.Join(err, fmt.Errorf("writing output: closing session directory watcher: %s", closeErr))
 		}
 	}()
 
 	if err := watcher.Add(s.Dir); err != nil {
-		return fmt.Errorf("writing results: adding session directory watcher: %s", err)
+		return fmt.Errorf("writing output: adding session directory watcher: %s", err)
 	}
 
 	entrypointPath := filepath.Join(s.Dir, s.template.Entrypoint)
@@ -668,7 +668,7 @@ func (s *Session) writeResults(ctx context.Context, w io.Writer) (err error) {
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok {
-				return fmt.Errorf("writing results: watcher events channel closed")
+				return fmt.Errorf("writing output: watcher events channel closed")
 			}
 			if event.Name != entrypointPath && event.Name != runScriptPath {
 				continue
@@ -684,17 +684,17 @@ func (s *Session) writeResults(ctx context.Context, w io.Writer) (err error) {
 			stopCurrentRun()
 			stopCurrentRun, err = s.startRunScript(ctx, w)
 			if err != nil {
-				return fmt.Errorf("writing results: %s", err)
+				return fmt.Errorf("writing output: %s", err)
 			}
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				return fmt.Errorf("writing results: watcher error channel closed")
+				return fmt.Errorf("writing output: watcher error channel closed")
 			}
-			return fmt.Errorf("writing results: watching session directory: %s", err)
+			return fmt.Errorf("writing output: watching session directory: %s", err)
 
 		case <-ctx.Done():
-			return fmt.Errorf("writing results: %s", ctx.Err())
+			return fmt.Errorf("writing output: %s", ctx.Err())
 		}
 	}
 }

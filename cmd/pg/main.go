@@ -116,7 +116,7 @@ func runMainCLI(ctx context.Context, a []string) (status int) {
 		}
 	}()
 
-	if err := ses.Run(ctx, args.ResultsPaneSize, args.Vertical, args.Editor, args.EditorArgs...); err != nil {
+	if err := ses.Run(ctx, args.OutputPaneSize, args.Vertical, args.Editor, args.EditorArgs...); err != nil {
 		if cause := context.Cause(ctx); cause != nil {
 			fmt.Fprintln(os.Stderr, cause)
 			return generalExitStatus
@@ -192,13 +192,13 @@ const (
 const sessionsDirEnvVar = "PG_SESSIONS_DIR"
 
 type args struct {
-	TemplateName    string
-	SessionName     string
-	Vertical        bool
-	ResultsPaneSize session.TmuxPaneSize
-	Editor          string
-	EditorArgs      []string
-	SessionsDir     string
+	TemplateName   string
+	SessionName    string
+	Vertical       bool
+	OutputPaneSize session.TmuxPaneSize
+	Editor         string
+	EditorArgs     []string
+	SessionsDir    string
 }
 
 // parseArgs parses the provided arguments and stores the result in the value pointed to by args.
@@ -240,8 +240,8 @@ func parseArgs(arguments []string, args *args) int {
 		verticalDesc = `Split the window vertically instead of horizontally.
 Valid values: 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
 `
-		resultsPaneSizeDesc = "Results pane `size` in lines/columns, or a percentage if followed by '%'.\n"
-		editorDesc          = "Shell `command` to open the editor." + `
+		outputPaneSizeDesc = "Output pane `size` in lines/columns, or a percentage if followed by '%'.\n"
+		editorDesc         = "Shell `command` to open the editor." + `
 For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template
 entrypoint is opened at the start line defined by the template.
 (default "vi")`
@@ -255,8 +255,8 @@ Example usage:
 	)
 
 	flagSet.BoolVarWithEnvVar(&args.Vertical, "vertical", "PG_VERTICAL", false, verticalDesc)
-	args.ResultsPaneSize = session.TmuxPaneSize("35%")
-	flagSet.VarWithEnvVar(&args.ResultsPaneSize, "results-pane-size", "PG_RESULTS_PANE_SIZE", resultsPaneSizeDesc)
+	args.OutputPaneSize = session.TmuxPaneSize("35%")
+	flagSet.VarWithEnvVar(&args.OutputPaneSize, "output-pane-size", "PG_OUTPUT_PANE_SIZE", outputPaneSizeDesc)
 	args.Editor = "vi"
 	flagSet.FuncWithEnvVar("editor", "EDITOR", editorDesc, setEditorAndArgs)
 	flagSet.StringVarWithEnvVar(&args.SessionsDir, "sessions-dir", sessionsDirEnvVar, defaultSessionsDir, sessionsDirDesc)

@@ -9,7 +9,7 @@ function __pg_is_nth_argument \
         switch $word
             case '-*'
             case '*'
-                if not contains -- $preceding_word -results-pane-size -editor -sessions-dir -completion-script
+                if not contains -- $preceding_word -output-pane-size -editor -sessions-dir -completion-script
                     set argument_count (math $argument_count + 1)
                 end
         end
@@ -44,8 +44,8 @@ complete --command pg \
     --description "{{.vertical_description}}"
 complete --command pg \
     --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
-    --old-option results-pane-size \
-    --description "{{.results_pane_size_description}}" \
+    --old-option output-pane-size \
+    --description "{{.output_pane_size_description}}" \
     --exclusive
 complete --command pg \
     --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
@@ -68,7 +68,7 @@ complete --command pg \
     --arguments '(__pg __complete -shell fish sessions (__pg_previous_token))' \
     --keep-order
 
-set --local normal_flags_not_seen 'not __fish_seen_argument --old vertical --old results-pane-size --old editor --old sessions-dir'
+set --local normal_flags_not_seen 'not __fish_seen_argument --old vertical --old output-pane-size --old editor --old sessions-dir'
 complete --command pg \
     --condition "$arguments_not_seen && $normal_flags_not_seen" \
     --old-option completion-script \

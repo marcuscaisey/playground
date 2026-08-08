@@ -75,7 +75,7 @@ function _pg() {
     for ((i = 1; i < COMP_CWORD; i++)); do
         word=${COMP_WORDS[i]}
         case $word in
-            -vertical|-results-pane-size|-editor|-sessions-dir)
+            -vertical|-output-pane-size|-editor|-sessions-dir)
                 used_flags["$word"]=
                 completion_mode=${completion_mode:=normal}
                 ;;
@@ -91,7 +91,7 @@ function _pg() {
                 ;;
             *)
                 preceding_word=${COMP_WORDS[i-1]}
-                if [[ $preceding_word == @(-results-pane-size|-editor|-sessions-dir|-completion-script) ]]; then
+                if [[ $preceding_word == @(-output-pane-size|-editor|-sessions-dir|-completion-script) ]]; then
                     # This is an option value, not a positional argument
                     continue
                 fi
@@ -109,7 +109,7 @@ function _pg() {
             previous_word=${COMP_WORDS[COMP_CWORD-1]}
         fi
         case $previous_word in
-            -results-pane-size)
+            -output-pane-size)
                 return
                 ;;
             -editor)
@@ -134,8 +134,8 @@ function _pg() {
                 if [[ ! -v 'used_flags[-vertical]' ]]; then
                     options[${#options[@]}]=-vertical
                 fi
-                if [[ ! -v 'used_flags[-results-pane-size]' ]]; then
-                    options[${#options[@]}]=-results-pane-size
+                if [[ ! -v 'used_flags[-output-pane-size]' ]]; then
+                    options[${#options[@]}]=-output-pane-size
                 fi
                 if [[ ! -v 'used_flags[-editor]' ]]; then
                     options[${#options[@]}]=-editor
