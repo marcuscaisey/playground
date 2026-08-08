@@ -132,7 +132,7 @@ func loadTemplate(name string, userTemplatesDir string) (template, error) {
 		}
 	}
 
-	entrypointRe := regexp.MustCompile(`^(?i)main\.[a-z]+$`)
+	entrypointRe := regexp.MustCompile(`^(?i)main\.[a-z\d]+$`)
 	templateFiles, err := fs.ReadDir(templateFS, ".")
 	if err != nil {
 		return template{}, fmt.Errorf("loading template %q: finding entrypoint: %s", name, err)
