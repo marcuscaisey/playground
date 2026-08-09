@@ -24,6 +24,10 @@ linters:
       - linters:
           - revive
         text: 'indent-error-flow: if block ends with a return statement, so drop this else and outdent its block'
+      - linters:
+          - revive
+        text: 'package-comments: should have a package comment'
+        path: internal/session/templates/go/main.go
 
 formatters:
   # Enable specific formatter.
