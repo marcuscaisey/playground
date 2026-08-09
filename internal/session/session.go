@@ -41,7 +41,6 @@
 package session
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -397,19 +396,21 @@ func (s *Session) runFromTmuxPane(
 		return fmt.Errorf("running session: opening editor: %s", err)
 	}
 
-	killOutputPane, outputPaneInput, err := s.createOutputPane(ctx, paneID, outputPaneSize, vertical)
+	outputPaneID, err := s.createOutputPane(ctx, paneID, outputPaneSize, vertical)
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
 	}
 	defer func() {
-		if killErr := killOutputPane(); killErr != nil {
-			err = errors.Join(err, fmt.Errorf("running session: %s", killErr))
+		// Use a fresh context in case the main one has been cancelled
+		_, killErr := cmdOutput(context.Background(), "tmux", "kill-pane", "-t", outputPaneID)
+		if killErr != nil && !strings.Contains(killErr.Error(), "can't find pane") {
+			err = errors.Join(err, fmt.Errorf("running session: closing output pane: %s", killErr))
 		}
 	}()
 
-	writeOutputErr := make(chan error, 1)
+	watchErr := make(chan error, 1)
 	wg.Go(func() {
-		writeOutputErr <- s.writeOutput(wgCtx, outputPaneInput)
+		watchErr <- s.watchSessionDir(wgCtx, outputPaneID)
 	})
 
 	editorErr := make(chan error, 1)
@@ -418,7 +419,7 @@ func (s *Session) runFromTmuxPane(
 	})
 
 	select {
-	case err := <-writeOutputErr:
+	case err := <-watchErr:
 		if err != nil {
 			return fmt.Errorf("running session: %s", err)
 		}
@@ -513,7 +514,7 @@ func (s *Session) runInTmuxSession(
 		}
 	}()
 
-	_, outputPaneInput, err := s.createOutputPane(ctx, editorPaneID, outputPaneSize, vertical)
+	outputPaneID, err := s.createOutputPane(ctx, editorPaneID, outputPaneSize, vertical)
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
 	}
@@ -525,9 +526,9 @@ func (s *Session) runInTmuxSession(
 		wg.Wait()
 	}()
 
-	writeOutputErr := make(chan error, 1)
+	watchErr := make(chan error, 1)
 	wg.Go(func() {
-		writeOutputErr <- s.writeOutput(wgCtx, outputPaneInput)
+		watchErr <- s.watchSessionDir(wgCtx, outputPaneID)
 	})
 
 	attachCmd := exec.CommandContext(wgCtx, "tmux", "attach-session", "-t", sessionID)
@@ -559,7 +560,7 @@ func (s *Session) runInTmuxSession(
 
 	var editorExitStatus string
 	select {
-	case err := <-writeOutputErr:
+	case err := <-watchErr:
 		if err != nil {
 			return fmt.Errorf("running session: %s", err)
 		}
@@ -590,73 +591,56 @@ func (s *Session) runInTmuxSession(
 	return nil
 }
 
-// createOutputPane splits the given pane to create the output pane.
-// It returns a function to kill it and an [io.Writer] that writes to the pane.
+// createOutputPane splits the given pane to create the output pane and returns its ID.
 func (s *Session) createOutputPane(
 	ctx context.Context,
 	paneID string,
 	size TmuxPaneSize,
 	vertical bool,
-) (kill func() error, stdin io.Writer, err error) {
+) (string, error) {
 	splitFlag := "-v"
 	if vertical {
 		splitFlag = "-h"
 	}
-	cmd := exec.CommandContext(ctx,
+	outputPaneID, err := cmdOutput(ctx,
 		"tmux", "split-window",
 		"-t", paneID,
 		"-d",
 		"-E",
-		"-I",
 		splitFlag,
 		"-l", size.String(),
 		"-P", "-F", "#{pane_id}")
-	stdin, err = cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating output pane: %s", err)
+		return "", fmt.Errorf("creating output pane: %s", err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating output pane: %s", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("creating output pane: executing %q: %s", cmd, cmdErr(err))
-	}
-
-	stdoutReader := bufio.NewReader(stdout)
-	output, err := stdoutReader.ReadString('\n')
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating output pane: reading tmux split-window stdout: %s", err)
-	}
-	outputPaneID := strings.TrimSpace(output)
-
-	kill = func() error {
-		// Use a fresh context in case the main one has been cancelled
-		_, killErr := cmdOutput(context.Background(), "tmux", "kill-pane", "-t", outputPaneID)
-		if killErr != nil && !strings.Contains(killErr.Error(), "can't find pane") {
-			return fmt.Errorf("closing output pane: %s", killErr)
-		}
-		return nil
-	}
-	return kill, stdin, nil
+	return outputPaneID, nil
 }
 
-// writeOutput watches the session directory for changes to the entrypoint or run script, executing
-// the run script and writing the output to w when changes occur.
+// watchSessionDir watches the session directory for changes to the entrypoint or run script,
+// executing the run script and writing the output to the given pane when changes occur.
 // Write errors are not returned.
-func (s *Session) writeOutput(ctx context.Context, w io.Writer) (err error) {
+func (s *Session) watchSessionDir(ctx context.Context, paneID string) (err error) {
+	displayCmd := exec.CommandContext(ctx, "tmux", "display-message", "-t", paneID, "-I")
+	outputPipe, err := displayCmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("watching session directory: creating pipe to output pane: %s", err)
+	}
+	if err := displayCmd.Start(); err != nil {
+		return fmt.Errorf("watching session directory: creating pipe to output pane: executing %q: %s", displayCmd, cmdErr(err))
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return fmt.Errorf("writing output: %s", err)
+		return fmt.Errorf("watching session directory: %s", err)
 	}
 	defer func() {
 		if closeErr := watcher.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("writing output: closing session directory watcher: %s", closeErr))
+			err = errors.Join(err, fmt.Errorf("watching session directory: closing session directory watcher: %s", closeErr))
 		}
 	}()
 
 	if err := watcher.Add(s.Dir); err != nil {
-		return fmt.Errorf("writing output: adding session directory watcher: %s", err)
+		return fmt.Errorf("watching session directory: adding session directory watcher: %s", err)
 	}
 
 	entrypointPath := filepath.Join(s.Dir, s.template.Entrypoint)
@@ -668,7 +652,7 @@ func (s *Session) writeOutput(ctx context.Context, w io.Writer) (err error) {
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok {
-				return fmt.Errorf("writing output: watcher events channel closed")
+				return fmt.Errorf("watching session directory: watcher events channel closed")
 			}
 			if event.Name != entrypointPath && event.Name != runScriptPath {
 				continue
@@ -682,28 +666,30 @@ func (s *Session) writeOutput(ctx context.Context, w io.Writer) (err error) {
 
 		case <-startTimerC:
 			stopCurrentRun()
-			stopCurrentRun, err = s.startRunScript(ctx, w)
+			stopCurrentRun, err = s.startRunScript(ctx, outputPipe, paneID)
 			if err != nil {
-				return fmt.Errorf("writing output: %s", err)
+				return fmt.Errorf("watching session directory: %s", err)
 			}
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				return fmt.Errorf("writing output: watcher error channel closed")
+				return fmt.Errorf("watching session directory: watcher error channel closed")
 			}
-			return fmt.Errorf("writing output: watching session directory: %s", err)
+			return fmt.Errorf("watching session directory: watching session directory: %s", err)
 
 		case <-ctx.Done():
-			return fmt.Errorf("writing output: %s", ctx.Err())
+			return fmt.Errorf("watching session directory: %s", ctx.Err())
 		}
 	}
 }
 
 // startRunScript starts execution of the session's run script and returns a function to stop it.
 // The run script is executed as "./run.sh" from the session directory.
+// The script's output is written to w.
+// TMUX_PANE is set to paneID in the script's environment.
 // The returned function blocks until execution has been stopped and is safe to be called after
 // execution has stopped.
-func (s *Session) startRunScript(ctx context.Context, w io.Writer) (stop func(), err error) {
+func (s *Session) startRunScript(ctx context.Context, w io.Writer, paneID string) (stop func(), err error) {
 	cmdCtx, cancelCmdCtx := context.WithCancel(ctx)
 	defer func() {
 		if err != nil {
@@ -712,6 +698,9 @@ func (s *Session) startRunScript(ctx context.Context, w io.Writer) (stop func(),
 	}()
 
 	cmd := exec.CommandContext(cmdCtx, "./"+runScriptFilename)
+	// Without this, if TMUX_PANE is set, it will be set to the pane of the current process rather
+	// than the pane that the script output is being sent to which would probably be unexpected.
+	cmd.Env = append(cmd.Environ(), "TMUX_PANE="+paneID)
 	cmd.Dir = s.Dir
 	cmd.Stdout = w
 	cmd.Stderr = w

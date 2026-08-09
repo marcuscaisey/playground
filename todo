@@ -1,6 +1,7 @@
 * Man page
 * Add copyright to source files
 * Execute run script when any file with same extension is saved (or just any file in the session directory?)
+* Tab complete based on already provided flags
 * Include hints to install missing dependencies in error messages
 * Decide when to show full / partial help text
 * Add more documentation to -help output?
