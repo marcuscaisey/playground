@@ -31,6 +31,11 @@ function __pg_previous_token --description 'Print the token before the current o
     echo $words[-1]
 end
 
+function __pg_args --description 'Print arguments'
+    set --local words (commandline --current-process --cut-at-cursor --tokens-expanded)
+    echo $words[2..]
+end
+
 set --local arguments_not_seen '__pg_is_nth_argument 1'
 complete --command pg \
     --condition $arguments_not_seen \
@@ -65,7 +70,7 @@ complete --command pg \
     --arguments '(__pg __complete -shell fish templates)'
 complete --command pg \
     --condition "__pg_is_nth_argument 2 && $completion_script_flags_not_seen" \
-    --arguments '(__pg __complete -shell fish sessions (__pg_previous_token))' \
+    --arguments '(__pg __complete -shell fish sessions (__pg_previous_token) (__pg_args))' \
     --keep-order
 
 set --local normal_flags_not_seen 'not __fish_seen_argument --old vertical --old output-pane-size --old editor --old sessions-dir'

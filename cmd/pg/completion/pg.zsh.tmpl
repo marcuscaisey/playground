@@ -28,7 +28,7 @@ function _pg() {
             ;;
         sessions)
             template=${line[1]}
-            sessions=(${(f)"$(_call_program sessions $command __complete -shell zsh sessions $template 2>/dev/null)"})
+            sessions=(${(f)"$(_call_program sessions $command __complete -shell zsh sessions $template "${words:1}" 2>/dev/null)"})
             _describe -t sessions $state_descr sessions
             ;;
     esac

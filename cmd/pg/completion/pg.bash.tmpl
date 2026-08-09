@@ -164,7 +164,7 @@ function _pg() {
             ;;
         1)
             template="${positionals[0]}"
-            _pg_complete_from_command "$current_word" "$command" __complete -shell bash sessions "$template"
+            _pg_complete_from_command "$current_word" "$command" __complete -shell bash sessions "$template" "${COMP_WORDS[@]:1}"
             ;;
     esac
 }

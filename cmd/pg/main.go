@@ -3,7 +3,6 @@ package main
 
 import (
 	"bufio"
-	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -80,9 +79,9 @@ func signalContext(parent context.Context, signals ...os.Signal) (ctx context.Co
 
 // runMainCLI runs the main command line interface and returns the exit status.
 // The main command line interface is responsible for running sessions.
-func runMainCLI(ctx context.Context, a []string) (status int) {
+func runMainCLI(ctx context.Context, arguments []string) (status int) {
 	args := args{}
-	if status := parseArgs(a, &args); status >= 0 {
+	if status := parseArgs(arguments, &args, parseModeLoud); status >= 0 {
 		return status
 	}
 
@@ -190,8 +189,6 @@ const (
 	usageErrorExitStatus = 2
 )
 
-const sessionsDirEnvVar = "PG_SESSIONS_DIR"
-
 type args struct {
 	TemplateName   string
 	SessionName    string
@@ -202,11 +199,32 @@ type args struct {
 	SessionsDir    string
 }
 
+// parseMode controls the behaviour of [parseArgs].
+type parseMode int
+
+const (
+	// In parseModeLoud, errors and help are output to stdout and stderr.
+	parseModeLoud parseMode = iota
+	// In parseModeSilent, nothing is output to stdout or stderr.
+	parseModeSilent
+)
+
 // parseArgs parses the provided arguments and stores the result in the value pointed to by args.
 // It returns an exit status >= 0 if the program should exit.
 // If -help is provided, a help message is printed.
 // If -completion-script $shell is provided, the completion script for $shell is printed.
-func parseArgs(arguments []string, args *args) int {
+func parseArgs(arguments []string, args *args, mode parseMode) int {
+	errorExitf := func(format string, a ...any) int {
+		if mode == parseModeLoud {
+			msg := fmt.Sprintf(format, a...)
+			fmt.Fprintf(os.Stderr, "error: %s\n", msg)
+		}
+		return generalExitStatus
+	}
+	errorExit := func(err error) int {
+		return errorExitf("%s", err)
+	}
+
 	// By default, [flag.Parse] emits parsing errors without:
 	//   - "error: " before the error message
 	//   - A blank line betweeen the error message and the usage text
@@ -269,6 +287,9 @@ func parseArgs(arguments []string, args *args) int {
 	help := flagSet.Bool("help", false, "print this message")
 
 	printUsage := func(w io.Writer) {
+		if mode == parseModeSilent {
+			return
+		}
 		_, _ = fmt.Fprintln(w, "Usage:")
 		_, _ = fmt.Fprintln(w, "    pg [options] template [session]")
 		_, _ = fmt.Fprintln(w, "    pg -completion-script shell")
@@ -282,8 +303,10 @@ func parseArgs(arguments []string, args *args) int {
 		_, _ = fmt.Fprintln(w, "or:   https://github.com/marcuscaisey/playground/blob/main/docs/pg.md")
 	}
 	usageErrorf := func(msg string, a ...any) int {
-		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
-		printUsage(os.Stderr)
+		if mode == parseModeLoud {
+			fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
+			printUsage(os.Stderr)
+		}
 		return usageErrorExitStatus
 	}
 
@@ -309,7 +332,9 @@ func parseArgs(arguments []string, args *args) int {
 		if err != nil {
 			return errorExit(err)
 		}
-		fmt.Print(completionScript)
+		if mode == parseModeLoud {
+			fmt.Print(completionScript)
+		}
 		return 0
 	}
 
@@ -372,14 +397,14 @@ func shellQuote(arg string) string {
 // runCompleteCLI runs the command line interface for the __complete subcommand and returns the exit
 // status.
 // The __complete subcommand prints completions for templates and sessions.
-func runCompleteCLI(args []string) int {
+func runCompleteCLI(arguments []string) int {
 	flagSet := flag.NewFlagSet(completeSubcmd, flag.ExitOnError)
 	shell := new(shell)
 	flagSet.Var(shell, "shell", "Shell to generate completions for")
 	printUsage := func() {
 		fmt.Fprintln(os.Stderr, "Usage:")
 		fmt.Fprintln(os.Stderr, "    pg [-shell (bash|zsh|fish)] __complete templates")
-		fmt.Fprintln(os.Stderr, "    pg [-shell (bash|zsh|fish)] __complete sessions <template-name>")
+		fmt.Fprintln(os.Stderr, "    pg [-shell (bash|zsh|fish)] __complete sessions <template> <current-args>")
 	}
 	usageError := func() int {
 		printUsage()
@@ -387,7 +412,7 @@ func runCompleteCLI(args []string) int {
 	}
 	flagSet.Usage = printUsage
 
-	_ = flagSet.Parse(args) // Parse exits on any error
+	_ = flagSet.Parse(arguments) // Parse exits on any error
 
 	if flagSet.NArg() < 1 {
 		return usageError()
@@ -407,16 +432,17 @@ func runCompleteCLI(args []string) int {
 		}
 
 	case "sessions":
-		if flagSet.NArg() != 2 {
+		if flagSet.NArg() < 2 {
 			return usageError()
 		}
 		templateName := flagSet.Arg(1)
-		defaultSessionsDir, err := defaultSessionsDir()
-		if err != nil {
-			return errorExit(err)
+		currentArguments := flagSet.Args()[2:]
+		currentArgs := &args{}
+		parseArgs(currentArguments, currentArgs, parseModeSilent)
+		if currentArgs.SessionsDir == "" {
+			return errorExitf("-sessions-dir not set")
 		}
-		sessionsDir := cmp.Or(os.Getenv(sessionsDirEnvVar), defaultSessionsDir)
-		if err := completeSessions(templateName, sessionsDir, *shell); err != nil {
+		if err := completeSessions(templateName, currentArgs.SessionsDir, *shell); err != nil {
 			return errorExit(err)
 		}
 
@@ -427,15 +453,14 @@ func runCompleteCLI(args []string) int {
 	return 0
 }
 
-// errorExit reports an error and returns the general error exit status 1.
-func errorExit(err error) int {
-	fmt.Fprintf(os.Stderr, "error: %s\n", err)
-	return generalExitStatus
-}
-
 // errorExit reports an error message and returns the general error exit status 1.
 func errorExitf(format string, a ...any) int {
 	msg := fmt.Sprintf(format, a...)
 	fmt.Fprintf(os.Stderr, "error: %s\n", msg)
 	return generalExitStatus
+}
+
+// errorExit reports an error and returns the general error exit status 1.
+func errorExit(err error) int {
+	return errorExitf("%s", err)
 }
