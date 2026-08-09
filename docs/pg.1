@@ -1,0 +1,160 @@
+.Dd August 8, 2026
+.Dt PG 1
+.Os
+.Sh NAME
+.Nm pg
+.Nd run a coding playground in your terminal
+.Sh SYNOPSIS
+.Nm pg
+.Op options
+.Ar template
+.Op Ar session
+.Nm pg
+.Fl completion-script Ar shell
+.Nm pg
+.Fl help
+.Sh DESCRIPTION
+Playground
+.Pq Nm
+runs a coding playground in your terminal.
+.Pp
+A
+.Em playground
+is an environment for quickly writing and executing a program in any language.
+The program is opened in your editor and automatically executed on save.
+The output is displayed in a separate
+.Xr tmux 1
+pane
+.Pq the Em output pane
+.Ns , under or to the side of the editor.
+When
+.Nm
+is not started from within tmux, it creates a temporary tmux session.
+.Pp
+When
+.Nm
+is started, it opens a
+.Em session
+.Ns — a playground created from the
+.Em template
+specified by the
+.Ar template
+argument.
+If the
+.Ar session
+argument is given, a
+.Em named
+session is created or resumed if it already exists.
+Otherwise, an
+.Em anonymous
+session is created which can be saved after it ends.
+The session ends when the editor is closed.
+Named sessions are created in the
+.Em sessions directory
+.Ns ,
+which defaults to $XDG_DATA_HOME/pg/sessions.
+See the
+.Sx OPTIONS
+section for all of the options that
+.Nm
+accepts.
+.Pp
+A template is a directory containing the files used to run a session.
+When a session is created, the contents of the template are copied into the session's working directory
+.Pq the Em session directory
+.Ns .
+.Nm
+provides a number of built-in templates but you can use your own by adding them to the
+.Em user templates directory
+$XDG_CONFIG_HOME/pg/templates.
+User templates override built-in templates with the same name.
+The structure of a template is described in the
+.Sx TEMPLATE STRUCTURE
+section.
+.Pp
+The built-in templates are: bash, c, dart, fish, go, java, lua, mdoc, node, php, python, rust, typescript, zsh.
+.Ss TEMPLATE STRUCTURE
+A template must contain at least the following files:
+.Bl -tag -width "main.*"
+.It main.*
+The
+.Em entrypoint
+opened when the session starts.
+Exactly one file matching this pattern must exist.
+If __CURSOR__ appears anywhere on a line, then the contents of the line (excluding leading whitespace) are erased when the file is copied into the session directory and, if possible, the cursor is placed on it when the entrypoint is opened.
+All __CURSOR__ appearances after the first one are ignored.
+.It run.sh
+The
+.Em run script
+.Ns ,
+executed as
+.Ql ./run.sh
+from the session directory when the program is saved.
+.El
+.Pp
+See the built-in templates for some examples:
+.Lk https://github.com/marcuscaisey/playground/blob/main/internal/session/templates
+.Ns .
+.Ss OPTIONS
+.Nm
+accepts the following options:
+.Bl -ohang
+.It Fl completion-script Ar shell
+.Bd -ragged -offset indent -compact
+Generate a shell completion script for bash, zsh, or fish.
+.It Fl editor Ar command
+.Bd -ragged -offset indent -compact
+Command to open the editor.
+For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template entrypoint is opened at the start line defined by the template.
+Defaults to $EDITOR if set, otherwise vi.
+.Ed
+.It Fl help
+.Bd -ragged -offset indent -compact
+Print a help message.
+.Ed
+.It Fl output-pane-size Ar size
+.Bd -ragged -offset indent -compact
+Output pane size in lines/columns, or a percentage if followed by '%'.
+Defaults to 35%.
+.Ed
+.It Fl sessions-dir Ar directory
+.Bd -ragged -offset indent -compact
+Directory where named sessions are stored.
+Defaults to $PG_SESSIONS_DIR if set, otherwise $XDG_DATA_HOME/pg/sessions.
+.Ed
+.It Fl vertical
+.Bd -ragged -offset indent -compact
+Split the window vertically instead of horizontally to create the output pane.
+Defaults to $PG_VERTICAL if set.
+Accepted values: 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
+.Ed
+.El
+.Sh EXIT STATUS
+.Nm
+exits 0 on success, and >0 if an error occurs.
+.Sh EXAMPLES
+To start an anonymous Go session:
+.Pp
+.Dl $ pg go
+.Pp
+To start or resume a Python session named banana:
+.Pp
+.Dl $ pg python banana
+.Pp
+To move the output pane to the side and have it take up half the screen:
+.Pp
+.Dl $ pg -vertical -output-pane-size 50% python
+.Pp
+To configure bash tab completion, add the following to ~/.bashrc:
+.Pp
+.Dl source <(pg -completion-script bash)
+.Pp
+To configure zsh tab completion, add the following to ~/.zshrc:
+.Pp
+.Dl source <(pg -completion-script zsh)
+.Pp
+To configure fish tab completion, add the following to ~/.config/fish/config.fish:
+.Pp
+.Dl pg -completion-script fish | source
+.Sh SEE ALSO
+.Xr tmux 1
