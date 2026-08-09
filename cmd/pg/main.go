@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -212,19 +213,14 @@ func parseArgs(arguments []string, args *args) int {
 	// These are minor annoyances but make the command line interface inconsistent. We therefore
 	// construct our own flag set to control what is emitted.
 
-	// Use [flag.ContinueOnError] error handling so that [flagSet.Parse] returns parsing errors to
-	// us instead of exiting. We can then prefix them with "error: " and print a blank line where
+	// Use [flag.ContinueOnError] error handling so that [flag.FlagSet.Parse] returns parsing errors
+	// to us instead of exiting. We can then prefix them with "error: " and print a blank line where
 	// required.
-	flagSet := newFlagSet("pg", flag.ContinueOnError)
-	// Discard all output until required (when we call [flagSet.PrintDefaults]). [flagSet.Parse]
-	// emits parsing errors through the output, so we need to suppress this since we're going to be
-	// emitting these errors ourself.
+	flagSet := flag.NewFlagSet("pg", flag.ContinueOnError)
+	// Discard all output until required (when we call [flag.FlagSet.PrintDefaults]).
+	// [flag.FlagSet.Parse] emits parsing errors through the output, so we need to suppress this
+	// since we're going to be emitting these errors ourself.
 	flagSet.SetOutput(io.Discard)
-
-	defaultSessionsDir, err := defaultSessionsDir()
-	if err != nil {
-		return errorExit(err)
-	}
 
 	setEditorAndArgs := func(s string) error {
 		fields := strings.Fields(strings.TrimSpace(s))
@@ -236,42 +232,54 @@ func parseArgs(arguments []string, args *args) int {
 		return nil
 	}
 
-	const (
-		verticalDesc = `Split the window vertically instead of horizontally.
-Valid values: 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
-`
-		outputPaneSizeDesc = "Output pane `size` in lines/columns, or a percentage if followed by '%'.\n"
-		editorDesc         = "Shell `command` to open the editor." + `
-For nvim, vim, vi, emacs, helix, kakoune, nano, and pico, the template
-entrypoint is opened at the start line defined by the template.
-(default "vi")`
-		sessionsDirDesc      = "Named sessions `directory`.\n"
-		completionScriptDesc = "Generate a `shell` completion script for bash, zsh, or fish." + `
-Example usage:
-    source <(pg -completion-script bash)
-    source <(pg -completion-script zsh)
-    pg -completion-script fish | source`
-		helpDesc = "Print help message."
-	)
-
-	flagSet.BoolVarWithEnvVar(&args.Vertical, "vertical", "PG_VERTICAL", false, verticalDesc)
-	args.OutputPaneSize = session.TmuxPaneSize("35%")
-	flagSet.VarWithEnvVar(&args.OutputPaneSize, "output-pane-size", "PG_OUTPUT_PANE_SIZE", outputPaneSizeDesc)
-	args.Editor = "vi"
-	flagSet.FuncWithEnvVar("editor", "EDITOR", editorDesc, setEditorAndArgs)
-	flagSet.StringVarWithEnvVar(&args.SessionsDir, "sessions-dir", sessionsDirEnvVar, defaultSessionsDir, sessionsDirDesc)
 	completionScriptShell := new(shell)
-	flagSet.Var(completionScriptShell, "completion-script", completionScriptDesc)
-	help := flagSet.Bool("help", false, helpDesc)
+	defaultVertical := false
+	if value := os.Getenv("PG_VERTICAL"); value != "" {
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return errorExitf("invalid value %q for $PG_VERTICAL: must be one of 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False", value)
+		}
+		defaultVertical = b
+	}
+	args.Editor = "vi"
+	if value := os.Getenv("EDITOR"); value != "" {
+		if err := setEditorAndArgs(value); err != nil {
+			return errorExitf("invalid value %q for $EDITOR: %s", value, err)
+		}
+	}
+	args.OutputPaneSize = session.TmuxPaneSize("35%")
+	if value := os.Getenv("PG_OUTPUT_PANE_SIZE"); value != "" {
+		if err := args.OutputPaneSize.Set(value); err != nil {
+			return errorExitf("invalid value %q for $PG_OUTPUT_PANE_SIZE: %s", value, err)
+		}
+	}
+	defaultSessionsDir, err := defaultSessionsDir()
+	if err != nil {
+		return errorExit(err)
+	}
+	if value := os.Getenv("PG_SESSIONS_DIR"); value != "" {
+		defaultSessionsDir = value
+	}
+
+	flagSet.Var(completionScriptShell, "completion-script", "generate a `shell` completion script for bash, zsh, or fish")
+	flagSet.BoolVar(&args.Vertical, "vertical", defaultVertical, "split the window vertically")
+	flagSet.Func("editor", "`command` to open the editor (default \"vi\")", setEditorAndArgs)
+	flagSet.Var(&args.OutputPaneSize, "output-pane-size", "output pane `size` in lines/columns, or a percentage")
+	flagSet.StringVar(&args.SessionsDir, "sessions-dir", defaultSessionsDir, "named sessions `directory`")
+	help := flagSet.Bool("help", false, "print this message")
 
 	printUsage := func(w io.Writer) {
-		_, _ = fmt.Fprintln(w, "Usage: pg [options] <template-name> [<session-name>]")
+		_, _ = fmt.Fprintln(w, "Usage:")
+		_, _ = fmt.Fprintln(w, "    pg [options] template [session]")
+		_, _ = fmt.Fprintln(w, "    pg -completion-script shell")
+		_, _ = fmt.Fprintln(w, "    pg -help")
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, "Options:")
-		flagSet.SetOutput(w) // Unsuppress output for [flagSet.PrintDefaults]
+		flagSet.SetOutput(w) // Unsuppress output for [flag.FlagSet.PrintDefaults]
 		flagSet.PrintDefaults()
 		_, _ = fmt.Fprintln(w)
-		_, _ = fmt.Fprintln(w, "Environment variables in brackets are used as defaults when set and valid.")
+		_, _ = fmt.Fprintln(w, "Docs: man pg")
+		_, _ = fmt.Fprintln(w, "or:   https://github.com/marcuscaisey/playground/blob/main/docs/pg.md")
 	}
 	usageErrorf := func(msg string, a ...any) int {
 		fmt.Fprintf(os.Stderr, "error: %s\n\n", fmt.Sprintf(msg, a...))
@@ -290,9 +298,13 @@ Example usage:
 
 	if *completionScriptShell != 0 {
 		if flagSet.NFlag() > 1 || flagSet.NArg() > 0 {
-			return usageErrorf("-completion-script flag must be provided on its own")
+			return usageErrorf("-completion-script must be provided on its own")
 		}
-		completionDescs := flagSet.CompletionDescriptions()
+		completionDescs := map[string]string{}
+		flagSet.VisitAll(func(f *flag.Flag) {
+			_, usage := flag.UnquoteUsage(f)
+			completionDescs[f.Name] = usage
+		})
 		completionScript, err := completionScript(completionDescs, *completionScriptShell)
 		if err != nil {
 			return errorExit(err)
@@ -302,7 +314,7 @@ Example usage:
 	}
 
 	if args.TemplateName = flagSet.Arg(0); args.TemplateName == "" {
-		return usageErrorf("template name not provided")
+		return usageErrorf("template not provided")
 	}
 	args.SessionName = flagSet.Arg(1)
 	if flagSet.NArg() > 2 {
