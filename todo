@@ -1,11 +1,9 @@
-* Add copyright to source files
-* Include hints to install missing dependencies in error messages
 * Add -version flag
 * README
     * Motiviation
     * Demo
     * Mention https://labix.org/hsandbox as inspiration
-    * Dependencies -- tmux, sh
+    * Dependencies -- tmux
     * No windows support
 * Build binary for all platforms (GoReleaser?)
 * CI test checking that markdown manual is in sync

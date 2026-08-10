@@ -1,43 +1,5 @@
-// Package session provides functionality for managing playground sessions and inspecting playground
-// sessions and templates.
-//
-// # Playground Session
-//
-// A playground session is an interactive terminal session where the user edits a file based on a
-// template which is executed on save.
-//
-// More concretely, running a playground session:
-//  1. Populates a directory (the session directory) with the contents of a playground template.
-//  2. Opens the template's entrypoint using the user's editor in a tmux pane (the editor pane). If
-//     the process is in a tmux pane, this is used; otherwise a new tmux session is started.
-//  3. In another tmux pane (the output pane), split from the editor pane, the template's run
-//     script is executed when either of the template's entrypoint or run script are saved.
-//  4. Closing the editor ends the session.
-//
-// A session can either be named or anonymous. For a named session, the session directory is in the
-// sessions directory (notice singular vs plural). For an anonymous session, the session directory
-// is in a temporary directory. Named sessions can be resumed after they've been ended. After a
-// session has ended, it can be saved as a named session.
-//
-// [Session] is the type which represents a playground session.
-//
-// # Playground Template
-//
-// A playground template is a directory containing the files used to run a playground session. The
-// contents of the template are copied into the session directory when the session is started.
-//
-// A template contains:
-//   - Exactly one "main.*" file, the entrypoint opened when the session starts.
-//     If __CURSOR__ appears anywhere on a line, then the contents of the line (excluding leading
-//     whitespace) are erased when the file is copied into the session directory and, if possible,
-//     the cursor is placed on it when the entrypoint is opened for the first time. All __CURSOR__
-//     appearances after the first one are ignored.
-//   - A "run.sh" file, the run script executed as "./run.sh".
-//   - Any other files needed to run the session.
-//
-// A number of built-in templates are provided by the [templates] package. Users can use their own
-// templates by adding them to the user templates directory. User templates take precedence over
-// built-in templates.
+// Package session provides functionality for managing sessions and inspecting sessions and
+// templates. See the manual (man docs/pg.1) for a description of sessions and templates.
 package session
 
 import (
