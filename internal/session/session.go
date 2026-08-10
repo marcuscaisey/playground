@@ -616,9 +616,9 @@ func (s *Session) createOutputPane(
 	return outputPaneID, nil
 }
 
-// watchSessionDir watches the session directory for changes to the entrypoint or run script,
-// executing the run script and writing the output to the given pane when changes occur.
-// Write errors are not returned.
+// watchSessionDir watches the session directory for changes to the run script or any file with the
+// entrypoint's extension, executing the run script and writing the output to the given pane when
+// changes occur.
 func (s *Session) watchSessionDir(ctx context.Context, paneID string) (err error) {
 	displayCmd := exec.CommandContext(ctx, "tmux", "display-message", "-t", paneID, "-I")
 	outputPipe, err := displayCmd.StdinPipe()
@@ -643,7 +643,7 @@ func (s *Session) watchSessionDir(ctx context.Context, paneID string) (err error
 		return fmt.Errorf("watching session directory: adding session directory watcher: %s", err)
 	}
 
-	entrypointPath := filepath.Join(s.Dir, s.template.Entrypoint)
+	entrypointExt := filepath.Ext(s.template.Entrypoint)
 	runScriptPath := filepath.Join(s.Dir, runScriptFilename)
 	var startTimerC <-chan time.Time
 	stopCurrentRun := func() {}
@@ -654,7 +654,7 @@ func (s *Session) watchSessionDir(ctx context.Context, paneID string) (err error
 			if !ok {
 				return fmt.Errorf("watching session directory: watcher events channel closed")
 			}
-			if event.Name != entrypointPath && event.Name != runScriptPath {
+			if filepath.Ext(event.Name) != entrypointExt && event.Name != runScriptPath {
 				continue
 			}
 			if !event.Has(fsnotify.Write) && !event.Has(fsnotify.Create) {

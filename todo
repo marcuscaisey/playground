@@ -1,5 +1,4 @@
 * Add copyright to source files
-* Execute run script when any file with same extension is saved (or just any file in the session directory?)
 * Include hints to install missing dependencies in error messages
 * Add -version flag
 * README
