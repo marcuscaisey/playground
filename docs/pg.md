@@ -173,4 +173,8 @@ To configure fish tab completion, add the following to ~/.config/fish/config.fis
 
 tmux(1)
 
-macOS 26.4 - August 8, 2026
+# AUTHORS
+
+Marcus Caisey <marcus@teckna.com>
+
+macOS 26.4 - August 10, 2026
