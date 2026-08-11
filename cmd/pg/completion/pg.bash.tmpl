@@ -121,7 +121,9 @@ function _pg() {
                 return
                 ;;
             -completion-script)
-                _pg_complete_from_words "$current_word" {{.completion_script_shell_values}}
+                local -a words
+                read -r -a words <<< "{{.completion_script_shell_values}}"
+                _pg_complete_from_words "$current_word" "${words[@]}"
                 return
                 ;;
         esac
