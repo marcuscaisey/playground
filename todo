@@ -1,7 +1,7 @@
 * Build binary for all platforms (GoReleaser?)
 * Installation script
-* Change log
 * CI test checking that markdown manual is in sync
+* Run goreleaser build in CI
 * Set up built-in templates so that 3rd party deps can be installed easily
 * README
     * Motiviation
