@@ -31,6 +31,7 @@ function __pg_previous_token --description 'Print the token before the current o
     echo $words[-1]
 end
 
+# @fish-lsp-disable-next-line 4004
 function __pg_args --description 'Print arguments'
     set --local words (commandline --current-process --cut-at-cursor --tokens-expanded)
     echo $words[2..]
@@ -44,15 +45,6 @@ complete --command pg \
 
 set --local completion_script_flags_not_seen 'not __fish_seen_argument --old completion-script'
 complete --command pg \
-    --condition $arguments_not_seen \
-    --old-option vertical \
-    --description "{{.vertical_description}}"
-complete --command pg \
-    --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
-    --old-option output-pane-size \
-    --description "{{.output_pane_size_description}}" \
-    --exclusive
-complete --command pg \
     --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
     --old-option editor \
     --description "{{.editor_description}}" \
@@ -60,10 +52,19 @@ complete --command pg \
     --arguments '(path filter --type file --perm exec $PATH/* | path basename | sort --unique)\t'
 complete --command pg \
     --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
+    --old-option output-pane-size \
+    --description "{{.output_pane_size_description}}" \
+    --exclusive
+complete --command pg \
+    --condition "$arguments_not_seen && $completion_script_flags_not_seen" \
     --old-option sessions-dir \
     --description "{{.sessions_dir_description}}" \
     --exclusive \
     --arguments '(__fish_complete_directories (commandline --current-token --cut-at-cursor) "")'
+complete --command pg \
+    --condition $arguments_not_seen \
+    --old-option vertical \
+    --description "{{.vertical_description}}"
 complete --command pg --no-files
 complete --command pg \
     --condition "__pg_is_nth_argument 1 && $completion_script_flags_not_seen" \

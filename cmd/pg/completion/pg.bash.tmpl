@@ -75,7 +75,7 @@ function _pg() {
     for ((i = 1; i < COMP_CWORD; i++)); do
         word=${COMP_WORDS[i]}
         case $word in
-            -vertical|-output-pane-size|-editor|-sessions-dir)
+            -editor|-output-pane-size|-sessions-dir|-vertical)
                 used_flags["$word"]=
                 completion_mode=${completion_mode:=normal}
                 ;;
@@ -91,7 +91,7 @@ function _pg() {
                 ;;
             *)
                 preceding_word=${COMP_WORDS[i-1]}
-                if [[ $preceding_word == @(-output-pane-size|-editor|-sessions-dir|-completion-script) ]]; then
+                if [[ $preceding_word == @(-completion-script|-editor|-output-pane-size|-sessions-dir) ]]; then
                     # This is an option value, not a positional argument
                     continue
                 fi
@@ -109,21 +109,21 @@ function _pg() {
             previous_word=${COMP_WORDS[COMP_CWORD-1]}
         fi
         case $previous_word in
-            -output-pane-size)
+            -completion-script)
+                local -a words
+                read -r -a words <<< "{{.completion_script_shell_values}}"
+                _pg_complete_from_words "$current_word" "${words[@]}"
                 return
                 ;;
             -editor)
                 _pg_complete_from_command "$current_word" _pg_path_commands
                 return
                 ;;
-            -sessions-dir)
-                compopt -o dirnames
+            -output-pane-size)
                 return
                 ;;
-            -completion-script)
-                local -a words
-                read -r -a words <<< "{{.completion_script_shell_values}}"
-                _pg_complete_from_words "$current_word" "${words[@]}"
+            -sessions-dir)
+                compopt -o dirnames
                 return
                 ;;
         esac
@@ -133,17 +133,17 @@ function _pg() {
                 options[${#options[@]}]=-help
             fi
             if [[ $completion_mode != completion_script ]]; then
-                if [[ ! -v 'used_flags[-vertical]' ]]; then
-                    options[${#options[@]}]=-vertical
+                if [[ ! -v 'used_flags[-editor]' ]]; then
+                    options[${#options[@]}]=-editor
                 fi
                 if [[ ! -v 'used_flags[-output-pane-size]' ]]; then
                     options[${#options[@]}]=-output-pane-size
                 fi
-                if [[ ! -v 'used_flags[-editor]' ]]; then
-                    options[${#options[@]}]=-editor
-                fi
                 if [[ ! -v 'used_flags[-sessions-dir]' ]]; then
                     options[${#options[@]}]=-sessions-dir
+                fi
+                if [[ ! -v 'used_flags[-vertical]' ]]; then
+                    options[${#options[@]}]=-vertical
                 fi
             fi
             if [[ ! -v 'used_flags[-completion-script]' && $completion_mode != normal ]]; then

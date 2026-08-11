@@ -280,11 +280,11 @@ func parseArgs(arguments []string, args *args, mode parseMode) int {
 	}
 
 	flagSet.Var(completionScriptShell, "completion-script", "generate a `shell` completion script for bash, zsh, or fish")
-	flagSet.BoolVar(&args.Vertical, "vertical", defaultVertical, "split the window vertically")
 	flagSet.Func("editor", "`command` to open the editor (default \"vi\")", setEditorAndArgs)
+	help := flagSet.Bool("help", false, "print this message")
 	flagSet.Var(&args.OutputPaneSize, "output-pane-size", "output pane `size` in lines/columns, or a percentage")
 	flagSet.StringVar(&args.SessionsDir, "sessions-dir", defaultSessionsDir, "named sessions `directory`")
-	help := flagSet.Bool("help", false, "print this message")
+	flagSet.BoolVar(&args.Vertical, "vertical", defaultVertical, "split the window vertically")
 
 	printUsage := func(w io.Writer) {
 		if mode == parseModeSilent {
