@@ -42,6 +42,10 @@ complete --command pg \
     --condition $arguments_not_seen \
     --old-option help \
     --description "{{.help_description}}"
+complete --command pg \
+    --condition $arguments_not_seen \
+    --old-option version \
+    --description "{{.version_description}}"
 
 set --local completion_script_flags_not_seen 'not __fish_seen_argument --old completion-script'
 complete --command pg \

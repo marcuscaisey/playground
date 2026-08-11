@@ -83,7 +83,7 @@ function _pg() {
                 used_flags["$word"]=
                 completion_mode=${completion_mode:=completion_script}
                 ;;
-            -help)
+            -help|-version)
                 used_flags["$word"]=
                 ;;
             -*)
@@ -131,6 +131,9 @@ function _pg() {
         if [[ $current_word == -* ]]; then
             if [[ ! -v 'used_flags[-help]' ]]; then
                 options[${#options[@]}]=-help
+            fi
+            if [[ ! -v 'used_flags[-version]' ]]; then
+                options[${#options[@]}]=-version
             fi
             if [[ $completion_mode != completion_script ]]; then
                 if [[ ! -v 'used_flags[-editor]' ]]; then

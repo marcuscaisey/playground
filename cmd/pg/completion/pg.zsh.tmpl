@@ -9,6 +9,7 @@ function _pg() {
     local -a opt_args templates sessions
     _arguments -C -A '-*' \
             '-help[{{.help_description}}]' \
+            '-version[{{.version_description}}]' \
         + normal \
             '(completion-script)-editor=[{{.editor_description}}]:command:_path_commands' \
             '(completion-script)-output-pane-size=[{{.output_pane_size_description}}]:size:' \

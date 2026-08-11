@@ -9,9 +9,11 @@ PG(1) - General Commands Manual
 **pg**
 \[options]
 *template*
-\[*session*]  
+\[*session*]
 **pg**
-**-completion-script**&nbsp;*shell*  
+**-completion-script**&nbsp;*shell*
+**pg**
+**-version**
 **pg**
 **-help**
 
@@ -132,16 +134,17 @@ accepts the following options:
 	Directory where named sessions are stored.
 	Defaults to $PG_SESSIONS_DIR if set, otherwise $XDG_DATA_HOME/pg/sessions.
 
+**-version**
+
+	Print the version of
+	**pg**
+	.
+
 **-vertical**
 
 	Split the window vertically instead of horizontally to create the output pane.
 	Defaults to $PG_VERTICAL if set.
 	Accepted values: 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False.
-
-# EXIT STATUS
-
-**pg**
-exits0 on success, and>0 if an error occurs.
 
 # EXAMPLES
 
@@ -177,4 +180,4 @@ tmux(1)
 
 Marcus Caisey <marcus@teckna.com>
 
-macOS 26.4 - August 10, 2026
+macOS 26.4 - August 11, 2026

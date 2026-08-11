@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"context"
+	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -77,12 +78,19 @@ func signalContext(parent context.Context, signals ...os.Signal) (ctx context.Co
 	}
 }
 
+//go:embed VERSION
+var VERSION string
+
 // runMainCLI runs the main command line interface and returns the exit status.
-// The main command line interface is responsible for running sessions.
 func runMainCLI(ctx context.Context, arguments []string) (status int) {
 	args := args{}
 	if status := parseArgs(arguments, &args, parseModeLoud); status >= 0 {
 		return status
+	}
+
+	if args.Version {
+		fmt.Println(strings.TrimSpace(VERSION))
+		return 0
 	}
 
 	userTemplatesDir, err := userTemplatesDir()
@@ -197,6 +205,7 @@ type args struct {
 	Editor         string
 	EditorArgs     []string
 	SessionsDir    string
+	Version        bool // mutually exclusive with the other args
 }
 
 // parseMode controls the behaviour of [parseArgs].
@@ -284,6 +293,7 @@ func parseArgs(arguments []string, args *args, mode parseMode) int {
 	help := flagSet.Bool("help", false, "print this message")
 	flagSet.Var(&args.OutputPaneSize, "output-pane-size", "output pane `size` in lines/columns, or a percentage")
 	flagSet.StringVar(&args.SessionsDir, "sessions-dir", defaultSessionsDir, "named sessions `directory`")
+	flagSet.BoolVar(&args.Version, "version", false, "print version")
 	flagSet.BoolVar(&args.Vertical, "vertical", defaultVertical, "split the window vertically")
 
 	printUsage := func(w io.Writer) {
@@ -293,6 +303,7 @@ func parseArgs(arguments []string, args *args, mode parseMode) int {
 		_, _ = fmt.Fprintln(w, "Usage:")
 		_, _ = fmt.Fprintln(w, "    pg [options] template [session]")
 		_, _ = fmt.Fprintln(w, "    pg -completion-script shell")
+		_, _ = fmt.Fprintln(w, "    pg -version")
 		_, _ = fmt.Fprintln(w, "    pg -help")
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, "Options:")
@@ -317,6 +328,10 @@ func parseArgs(arguments []string, args *args, mode parseMode) int {
 	if *help {
 		printUsage(os.Stdout)
 		return 0
+	}
+
+	if args.Version && flagSet.NArg() == 0 {
+		return -1
 	}
 
 	if *completionScriptShell != 0 {

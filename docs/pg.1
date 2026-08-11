@@ -1,4 +1,4 @@
-.Dd August 10, 2026
+.Dd August 11, 2026
 .Dt PG 1
 .Os
 .Sh NAME
@@ -11,6 +11,8 @@
 .Op Ar session
 .Nm pg
 .Fl completion-script Ar shell
+.Nm pg
+.Fl version
 .Nm pg
 .Fl help
 .Sh DESCRIPTION
@@ -121,6 +123,12 @@ Defaults to 35%.
 .Bd -ragged -offset indent -compact
 Directory where named sessions are stored.
 Defaults to $PG_SESSIONS_DIR if set, otherwise $XDG_DATA_HOME/pg/sessions.
+.Ed
+.It Fl version
+.Bd -ragged -offset indent -compact
+Print the version of
+.Nm
+.Ns .
 .Ed
 .It Fl vertical
 .Bd -ragged -offset indent -compact
