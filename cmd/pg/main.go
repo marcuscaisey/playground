@@ -341,6 +341,7 @@ func parseArgs(arguments []string, args *args, mode parseMode) int {
 		completionDescs := map[string]string{}
 		flagSet.VisitAll(func(f *flag.Flag) {
 			_, usage := flag.UnquoteUsage(f)
+			usage, _, _ = strings.Cut(usage, " (default")
 			completionDescs[f.Name] = usage
 		})
 		completionScript, err := completionScript(completionDescs, *completionScriptShell)
