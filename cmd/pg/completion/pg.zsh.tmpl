@@ -1,3 +1,5 @@
+#compdef pg
+
 # pg __complete sessions already sorts its output
 zstyle ':completion:*:*:pg:*:sessions' sort false
 # Grouping these completions by description causes them to not be sorted
@@ -35,6 +37,11 @@ function _pg() {
     esac
 }
 
-compdef _pg pg
+# Don't run the completion function when being sourced by itself
+if [[ $funcstack[1] == _pg ]]; then
+    _pg "$@"
+else
+    compdef _pg pg
+fi
 
 # vim: filetype=zsh.gotmpl
