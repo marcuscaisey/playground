@@ -312,7 +312,7 @@ func parseArgs(arguments []string, args *args, mode parseMode) int {
 		flagSet.PrintDefaults()
 		_, _ = fmt.Fprintln(w)
 		_, _ = fmt.Fprintln(w, "Docs: man pg")
-		_, _ = fmt.Fprintln(w, "or:   https://github.com/marcuscaisey/playground/blob/main/docs/pg.md")
+		_, _ = fmt.Fprintln(w, "or:   https://github.com/marcuscaisey/playground/blob/main/docs/pg.1.md")
 	}
 	usageErrorf := func(msg string, a ...any) int {
 		if mode == parseModeLoud {
