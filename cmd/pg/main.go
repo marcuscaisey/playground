@@ -78,8 +78,9 @@ func signalContext(parent context.Context, signals ...os.Signal) (ctx context.Co
 	}
 }
 
-//go:embed VERSION
-var VERSION string
+// This can be overridden by passing -ldflags '-X main.version=...' to go build. This is
+// automatically done by GoReleaser.
+var version = "dev"
 
 // runMainCLI runs the main command line interface and returns the exit status.
 func runMainCLI(ctx context.Context, arguments []string) (status int) {
@@ -89,7 +90,7 @@ func runMainCLI(ctx context.Context, arguments []string) (status int) {
 	}
 
 	if args.Version {
-		fmt.Println(strings.TrimSpace(VERSION))
+		fmt.Println(version)
 		return 0
 	}
 
