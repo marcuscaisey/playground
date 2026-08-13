@@ -57,7 +57,7 @@ The session ends when the editor is closed.
 Named sessions are created in the
 *sessions directory*
 ,
-which defaults to $XDG\_DATA\_HOME/pg/sessions.
+which defaults to $XDG\_DATA\_HOME/pg/sessions, or $HOME/.local/share/pg/sessions if $XDG\_DATA\_HOME is not set.
 See the
 *OPTIONS*
 section for all of the options that
@@ -71,7 +71,7 @@ When a session is created, the contents of the template are copied into the sess
 **pg**
 provides a number of built-in templates but you can use your own by adding them to the
 *user templates directory*
-$XDG\_CONFIG\_HOME/pg/templates.
+$XDG\_CONFIG\_HOME/pg/templates, or $HOME/.config/pg/templates if $XDG\_CONFIG\_HOME is not set.
 User templates override built-in templates with the same name.
 The structure of a template is described in the
 *TEMPLATE STRUCTURE*

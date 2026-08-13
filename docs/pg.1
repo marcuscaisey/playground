@@ -54,7 +54,7 @@ The session ends when the editor is closed.
 Named sessions are created in the
 .Em sessions directory
 .Ns ,
-which defaults to $XDG_DATA_HOME/pg/sessions.
+which defaults to $XDG_DATA_HOME/pg/sessions, or $HOME/.local/share/pg/sessions if $XDG_DATA_HOME is not set.
 See the
 .Sx OPTIONS
 section for all of the options that
@@ -68,7 +68,7 @@ When a session is created, the contents of the template are copied into the sess
 .Nm
 provides a number of built-in templates but you can use your own by adding them to the
 .Em user templates directory
-$XDG_CONFIG_HOME/pg/templates.
+$XDG_CONFIG_HOME/pg/templates, or $HOME/.config/pg/templates if $XDG_CONFIG_HOME is not set.
 User templates override built-in templates with the same name.
 The structure of a template is described in the
 .Sx TEMPLATE STRUCTURE
