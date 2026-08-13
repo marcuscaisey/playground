@@ -9,11 +9,11 @@ PG(1) - General Commands Manual
 **pg**
 \[options]
 *template*
-\[*session*]
+\[*session*]  
 **pg**
-**-completion-script**&nbsp;*shell*
+**-completion-script**&nbsp;*shell*  
 **pg**
-**-version**
+**-version**  
 **pg**
 **-help**
 
@@ -77,7 +77,7 @@ The structure of a template is described in the
 *TEMPLATE STRUCTURE*
 section.
 
-The built-in templates are: bash, c, dart, fish, go, java, lua, mdoc, node, php, python, rust, typescript, zsh.
+The built-in templates are: bash, c, dart, fish, go, java, lua, mdoc, node, php, python, rust, sh, typescript, zsh.
 
 ## TEMPLATE STRUCTURE
 
