@@ -69,7 +69,7 @@ func allShells() []shell {
 var (
 	//go:embed completions/pg.bash.tmpl
 	bashCompletionScriptTmpl string
-	//go:embed completions/pg.zsh.tmpl
+	//go:embed completions/_pg.tmpl
 	zshCompletionScriptTmpl string
 	//go:embed completions/pg.fish.tmpl
 	fishCompletionScriptTmpl string
