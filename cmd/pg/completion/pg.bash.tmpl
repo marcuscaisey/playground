@@ -15,7 +15,7 @@ function _pg_complete_from_words() {
         return
     fi
     printf -v wordlist '%q ' "${words[@]}"
-    compgen -V COMPREPLY -W "$wordlist" -- "$prefix"
+    mapfile -t COMPREPLY < <(compgen -W "$wordlist" -- "$prefix")
 }
 
 #######################################
