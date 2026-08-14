@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+#
+# Writes the release notes for a given version to build/release_notes.md.
+# The release notes are composed of a changelog and installation instructions.
+# The changes in the changelog are the ones from the latest version in CHANGELOG.md.
+# Arguments:
+#     $1: version
+
+version=$1
+if [ -z "$version" ]; then
+    printf 'error: missing required version argument\n' >&2
+    exit 2
+fi
+
+mkdir -p build
+{
+    printf '## Changelog\n'
+
+    awk '
+        /^## / {
+            if (found) exit
+            found = 1
+            next
+        }
+        found
+    ' CHANGELOG.md
+
+    printf '## Installation\n'
+    printf '### %s\n' "$version"
+    printf '```sh\n'
+    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh | sudo sh -s -- -v %s\n' "$version"
+    printf '```\n'
+    printf '### Latest\n'
+    printf '```sh\n'
+    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh | sudo sh\n'
+    printf '```\n'
+    printf 'See the [README](https://github.com/marcuscaisey/playground#installation) for more details.\n'
+} > build/release_notes.md

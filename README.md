@@ -30,6 +30,76 @@ not work as expected, or if there is a feature you would like to see added.
 playground requires [tmux](https://github.com/tmux/tmux/wiki), therefore only runs where tmux is
 supported.
 
+## Installation
+
+### Installation Script
+
+The simplest way to install `pg` is run the installation script
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \
+    | sudo sh
+```
+
+This installs the latest version of `pg`, the `pg` man page, and the `pg` shell completion scripts.
+
+To install a different version, run
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \
+    | sudo sh -s -- -v 1.2.3
+```
+
+By default, everything is installed under `/usr/local`. To install under a different directory, run
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \
+    | sudo sh -s -- -d /opt/pg
+```
+
+See [uninstallation](#uninstallation) for how to uninstall.
+
+### Tarball
+
+See https://github.com/marcuscaisey/playground/releases for the release tarballs.
+
+### From Source
+
+To install the latest version, run
+
+```sh
+go install github.com/marcuscaisey/playground/cmd/pg@latest
+```
+
+To install the a specific version, run
+
+```sh
+go install github.com/marcuscaisey/playground/cmd/pg@v1.2.3
+```
+
+To install from the head of the main branch, run
+
+```sh
+go install github.com/marcuscaisey/playground/cmd/pg@main
+```
+
+## Uninstallation
+
+If you installed `pg` using the [installation script](#installation-script), you can uninstall it by
+running
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/uninstall.sh \
+    | sudo sh
+```
+
+If you installed `pg` to a non-default directory, instead run
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/uninstall.sh \
+    | sudo sh -s -- -d /opt/pg
+```
+
 ## Documentation
 
 For detailed documentation, open the man page by running

@@ -1,0 +1,33 @@
+version: 2
+
+project_name: pg
+
+before:
+  hooks:
+    - go mod tidy
+    - scripts/generate_release_notes {{.Version}}
+    - scripts/generate_completions
+
+builds:
+  - main: ./cmd/pg
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+archives:
+  - files:
+      - CHANGELOG.md
+      - LICENSE
+      - LICENSES/*
+      - README.md
+      - src: build/completions
+        dst: completions
+      - docs
+
+release:
+  name_template: "{{.ProjectName}} {{.Version}}"
+
+snapshot:
+  version_template: "{{ .Version }}-next"

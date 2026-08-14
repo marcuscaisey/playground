@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+#
+# Writes the completion scripts to build/completions
+
+mkdir -p build/completions
+go run ./cmd/pg -completion-script bash > build/completions/pg.bash
+go run ./cmd/pg -completion-script zsh > build/completions/_pg
+go run ./cmd/pg -completion-script fish > build/completions/pg.fish
