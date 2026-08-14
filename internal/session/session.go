@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,7 +35,7 @@ type Session struct {
 	Dir          string
 	TemplateName string // Name of the session's template
 	template     template
-	sessionsDir  string // Directory where named sessions are stored
+	sessionsDir  string // Directory where sessions are stored
 }
 
 // InvalidTemplateNameError records an invalid template name and the reason it's invalid.
@@ -109,8 +110,8 @@ func (e *InvalidNameError) Error() string {
 // The returned error wraps an [*InvalidNameError].
 func validateSessionName(name string) error {
 	var reason string
-	if strings.HasPrefix(name, namedSessionStagingDirPrefix) {
-		reason = fmt.Sprintf("cannot use reserved prefix %q", namedSessionStagingDirPrefix)
+	if strings.HasPrefix(name, sessionStagingDirPrefix) {
+		reason = fmt.Sprintf("cannot use reserved prefix %q", sessionStagingDirPrefix)
 	}
 	if err := validateDirNameSafe(name); err != nil {
 		reason = err.Error()
@@ -194,7 +195,7 @@ func (s *Session) Run(
 	if s.Name != "" {
 		s.Dir, err = s.setupNamedSessionDir()
 	} else {
-		s.Dir, err = s.setupAnonSessionDir(s.template)
+		s.Dir, err = s.setupAnonSessionDir()
 	}
 	if err != nil {
 		return fmt.Errorf("running session: %s", err)
@@ -244,27 +245,26 @@ func (s *Session) Run(
 	}
 }
 
-const namedSessionStagingDirPrefix = ".pg-tmp"
+const sessionStagingDirPrefix = ".pg-tmp"
 
 // setupNamedSessionDir creates and initialises a named session directory from the session's
 // template if it doesn't already exist. The session directory is returned.
 func (s *Session) setupNamedSessionDir() (string, error) {
-	sessionDir := s.namedSessionDir(s.Name)
+	templateSessionsDir := templateSessionsDir(s.sessionsDir, s.template.Name)
+	sessionDir := filepath.Join(templateSessionsDir, s.Name)
 	if ok, err := fileExists(sessionDir); err != nil {
 		return "", fmt.Errorf("setting up session directory: %s", err)
 	} else if ok {
 		return sessionDir, nil
 	}
 
-	// We set up the session in a temporary staging directory first and then move it into place.
-	// This way, if the set up fails, we're not left with a partially set up directory which would
-	// get used by future sessions.
-	sessionDirParent := filepath.Dir(sessionDir)
-	if err := os.MkdirAll(sessionDirParent, 0755); err != nil {
+	// Set up in a staging directory first so that if there's an error, we're not left with a
+	// partially set up directory which would be used by future sessions.
+	if err := os.MkdirAll(templateSessionsDir, 0755); err != nil {
 		return "", fmt.Errorf("setting up session directory: %s", err)
 	}
-	stagingDirNamePattern := fmt.Sprintf("%s-*", namedSessionStagingDirPrefix)
-	stagingDir, err := os.MkdirTemp(sessionDirParent, stagingDirNamePattern)
+	stagingDirNamePattern := fmt.Sprintf("%s-*", sessionStagingDirPrefix)
+	stagingDir, err := os.MkdirTemp(templateSessionsDir, stagingDirNamePattern)
 	if err != nil {
 		return "", fmt.Errorf("setting up session directory: creating staging directory: %s", err)
 	}
@@ -273,6 +273,7 @@ func (s *Session) setupNamedSessionDir() (string, error) {
 	if err := s.template.Initialise(stagingDir); err != nil {
 		return "", err
 	}
+
 	if err := os.Rename(stagingDir, sessionDir); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			// If the directory already exists, there must have been a racing process trying to
@@ -286,33 +287,46 @@ func (s *Session) setupNamedSessionDir() (string, error) {
 	return sessionDir, nil
 }
 
-// namedSessionDir returns the directory where a named session is stored.
-func (s *Session) namedSessionDir(name string) string {
+// setupAnonSessionDir creates and initialises an anonymous session directory from the session's
+// template. The session directory is returned.
+func (s *Session) setupAnonSessionDir() (string, error) {
+	// Set up in a staging directory first so that if there's an error, we're not left with a
+	// partially set up directory which would be used by future sessions.
 	templateSessionsDir := templateSessionsDir(s.sessionsDir, s.template.Name)
-	return filepath.Join(templateSessionsDir, name)
-}
-
-// templateSessionsDir returns the directory where named sessions for the given template are stored.
-func templateSessionsDir(sessionsDir string, templateName string) string {
-	return filepath.Join(sessionsDir, templateName)
-}
-
-// setupAnonSessionDir creates and initialises a session directory from template in a temporary
-// directory. The session directory is returned.
-func (s *Session) setupAnonSessionDir(template template) (string, error) {
-	sessionDirParent := filepath.Join(os.TempDir(), "pg")
-	if err := os.MkdirAll(sessionDirParent, 0755); err != nil {
-		return "", fmt.Errorf("setting up session directory: creating temporary directory: %s", err)
-	}
-	namePattern := fmt.Sprintf("%s-*", template.Name)
-	sessionDir, err := os.MkdirTemp(sessionDirParent, namePattern)
-	if err != nil {
+	if err := os.MkdirAll(templateSessionsDir, 0755); err != nil {
 		return "", fmt.Errorf("setting up session directory: %s", err)
 	}
-	if err := template.Initialise(sessionDir); err != nil {
+	stagingDirNamePattern := fmt.Sprintf("%s-*", sessionStagingDirPrefix)
+	stagingDir, err := os.MkdirTemp(templateSessionsDir, stagingDirNamePattern)
+	if err != nil {
+		return "", fmt.Errorf("setting up session directory: creating staging directory: %s", err)
+	}
+	// We can tolerate this directory hanging around since it's hidden
+	defer func() { _ = os.RemoveAll(stagingDir) }()
+	if err := s.template.Initialise(stagingDir); err != nil {
 		return "", err
 	}
-	return sessionDir, nil
+
+	try := 0
+	for {
+		name := fmt.Sprintf("anonymous-%d", rand.Uint32())
+		sessionDir := filepath.Join(templateSessionsDir, name)
+		if err := os.Rename(stagingDir, sessionDir); err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				if try++; try < 10000 {
+					continue
+				}
+				return "", fmt.Errorf("setting up session directory: failed to create temporary directory after %d attempts", try)
+			}
+			return "", fmt.Errorf("setting up session directory: moving into place: %s", err)
+		}
+		return sessionDir, nil
+	}
+}
+
+// templateSessionsDir returns the directory where sessions for the given template are stored.
+func templateSessionsDir(sessionsDir string, templateName string) string {
+	return filepath.Join(sessionsDir, templateName)
 }
 
 // ErrEditorError indicates that the editor exited with a non-zero status.
@@ -730,7 +744,7 @@ func (e *AlreadyExistsError) Error() string {
 	return fmt.Sprintf("session %q already exists", e.Name)
 }
 
-// Save saves the session as a named session.
+// Save saves the session with the given name.
 // If the name is invalid, the returned error wraps an [*InvalidNameError].
 // If a session with the same name already exists, the returned error wraps an
 // [*AlreadyExistsError].
@@ -741,10 +755,8 @@ func (s *Session) Save(name string) error {
 	if err := validateSessionName(name); err != nil {
 		return fmt.Errorf("saving session: %w", err)
 	}
-	newSessionDir := s.namedSessionDir(name)
-	if err := os.MkdirAll(filepath.Dir(newSessionDir), 0755); err != nil {
-		return fmt.Errorf("saving session: %s", err)
-	}
+	templateSessionsDir := templateSessionsDir(s.sessionsDir, s.template.Name)
+	newSessionDir := filepath.Join(templateSessionsDir, name)
 	if err := os.Rename(s.Dir, newSessionDir); err != nil {
 		if errors.Is(err, fs.ErrExist) {
 			return fmt.Errorf("saving session: %w", &AlreadyExistsError{Name: name, Dir: newSessionDir})
@@ -772,7 +784,7 @@ func TemplateSessions(templateName string, sessionsDir string) ([]Info, error) {
 	var sessions []Info
 	for _, dir := range sessionDirs {
 		name := dir.Name()
-		if strings.HasPrefix(name, namedSessionStagingDirPrefix) {
+		if strings.HasPrefix(name, sessionStagingDirPrefix) {
 			continue
 		}
 		var lastOpened time.Time

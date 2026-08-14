@@ -54,7 +54,7 @@ Otherwise, an
 *anonymous*
 session is created which can be saved after it ends.
 The session ends when the editor is closed.
-Named sessions are created in the
+Sessions are created in the
 *sessions directory*
 ,
 which defaults to $XDG\_DATA\_HOME/pg/sessions, or $HOME/.local/share/pg/sessions if $XDG\_DATA\_HOME is not set.
@@ -131,7 +131,7 @@ accepts the following options:
 
 **-sessions-dir** *directory*
 
-	Directory where named sessions are stored.
+	Directory where sessions are stored.
 	Defaults to $PG_SESSIONS_DIR if set, otherwise $XDG_DATA_HOME/pg/sessions.
 
 **-version**

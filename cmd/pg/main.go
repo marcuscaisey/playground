@@ -119,9 +119,9 @@ func runMainCLI(ctx context.Context, arguments []string) (status int) {
 		// If there was an error, keep the anonymous session directory around so its contents can be
 		// recovered
 		if status == 0 && ses.Name == "" && ses.Dir != "" {
-			// Anonymous session directory is temporary so even if we fail to clean it up, it should
-			// get cleaned up by the OS at some point.
-			_ = os.RemoveAll(ses.Dir)
+			if err := os.RemoveAll(ses.Dir); err != nil {
+				status = errorExitf("failed to remove anonymous session directory: %s", err)
+			}
 		}
 	}()
 
@@ -293,7 +293,7 @@ func parseArgs(arguments []string, args *args, mode parseMode) int {
 	flagSet.Func("editor", "`command` to open the editor (default \"vi\")", setEditorAndArgs)
 	help := flagSet.Bool("help", false, "print this message")
 	flagSet.Var(&args.OutputPaneSize, "output-pane-size", "output pane `size` in lines/columns, or a percentage")
-	flagSet.StringVar(&args.SessionsDir, "sessions-dir", defaultSessionsDir, "named sessions `directory`")
+	flagSet.StringVar(&args.SessionsDir, "sessions-dir", defaultSessionsDir, "`directory` where sessions are stored")
 	flagSet.BoolVar(&args.Version, "version", false, "print version")
 	flagSet.BoolVar(&args.Vertical, "vertical", defaultVertical, "split the window vertically")
 
