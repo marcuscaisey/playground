@@ -35,7 +35,7 @@ type Session struct {
 	Dir          string
 	TemplateName string // Name of the session's template
 	template     template
-	sessionsDir  string // Directory where sessions are stored
+	sessionsDir  string // Directory where sessions are created
 }
 
 // InvalidTemplateNameError records an invalid template name and the reason it's invalid.
@@ -324,7 +324,7 @@ func (s *Session) setupAnonSessionDir() (string, error) {
 	}
 }
 
-// templateSessionsDir returns the directory where sessions for the given template are stored.
+// templateSessionsDir returns the directory where sessions for the given template are created.
 func templateSessionsDir(sessionsDir string, templateName string) string {
 	return filepath.Join(sessionsDir, templateName)
 }

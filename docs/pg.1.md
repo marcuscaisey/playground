@@ -131,7 +131,7 @@ accepts the following options:
 
 **-sessions-dir** *directory*
 
-	Directory where sessions are stored.
+	Directory where sessions are created.
 	Defaults to $PG_SESSIONS_DIR if set, otherwise $XDG_DATA_HOME/pg/sessions.
 
 **-version**
