@@ -4,9 +4,4 @@
 * Run goreleaser build in CI
 * Set up built-in templates so that 3rd party deps can be installed easily
 * README
-    * Motiviation
-    * Demo
-    * Mention https://labix.org/hsandbox as inspiration
-    * Dependencies -- tmux
-    * No windows support
     * Installation
