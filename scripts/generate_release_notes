@@ -28,11 +28,13 @@ mkdir -p build
     printf '## Installation\n'
     printf '### %s\n' "$version"
     printf '```sh\n'
-    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh | sudo sh -s -- -v %s\n' "$version"
+    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
+    printf '    | sudo sh -s -- -v %s\n' "$version"
     printf '```\n'
     printf '### Latest\n'
     printf '```sh\n'
-    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh | sudo sh\n'
+    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
+    printf '    | sudo sh\n'
     printf '```\n'
     printf 'See the [README](https://github.com/marcuscaisey/playground#installation) for more details.\n'
 } > build/release_notes.md
