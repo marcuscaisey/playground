@@ -23,7 +23,7 @@ Playground
 (**pg**)
 runs a coding playground in your terminal.
 
-A
+A coding
 *playground*
 is an environment for quickly writing and executing a program in any language.
 The program is opened in your editor and automatically executed on save.
