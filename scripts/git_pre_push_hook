@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+#
+# Git pre-push hook which runs the same commands as the CI workflow
+# Install with: ln -s "$(git rev-parse --show-toplevel)/scripts/git_pre_push_hook" .git/hooks/pre-push
+
+set -eu
+
+scripts/check_markdown_man_page
+goreleaser release --snapshot --clean
