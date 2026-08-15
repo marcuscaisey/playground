@@ -5,8 +5,12 @@ project_name: pg
 before:
   hooks:
     - go mod tidy
-    - scripts/generate_release_notes {{.Version}}
-    - scripts/generate_completions
+    - mkdir -p build
+    - sh -c "scripts/generate_release_notes {{.Version}} >build/release_notes.md"
+    - mkdir -p build/completions
+    - sh -c "go run ./cmd/pg -completion-script bash >build/completions/pg.bash"
+    - sh -c "go run ./cmd/pg -completion-script zsh >build/completions/_pg"
+    - sh -c "go run ./cmd/pg -completion-script fish >build/completions/pg.fish"
 
 builds:
   - main: ./cmd/pg

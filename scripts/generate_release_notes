@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 #
-# Writes the release notes for a given version to build/release_notes.md.
+# Prints the release notes for a given version to stdout
 # The release notes are composed of a changelog and installation instructions.
-# The changes in the changelog are the ones from the latest version in CHANGELOG.md.
+# The changes in the changelog are the ones from the latest version in CHANGELOG.md. The version
+# argument does not affect which changes are included.
 # Arguments:
 #     $1: version
 
@@ -14,29 +15,26 @@ if [ -z "$version" ]; then
     exit 2
 fi
 
-mkdir -p build
-{
-    printf '## Changelog\n'
+printf '## Changelog\n'
 
-    awk '
-        /^## / {
-            if (found) exit
-            found = 1
-            next
-        }
-        found
-    ' CHANGELOG.md
+awk '
+    /^## / {
+        if (found) exit
+        found = 1
+        next
+    }
+    found
+' CHANGELOG.md
 
-    printf '## Installation\n'
-    printf '### %s\n' "$version"
-    printf '```sh\n'
-    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
-    printf '    | sudo sh -s -- -v %s\n' "$version"
-    printf '```\n'
-    printf '### Latest\n'
-    printf '```sh\n'
-    printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
-    printf '    | sudo sh\n'
-    printf '```\n'
-    printf 'See the [README](https://github.com/marcuscaisey/playground#installation) for more details.\n'
-} > build/release_notes.md
+printf '## Installation\n'
+printf '### %s\n' "$version"
+printf '```sh\n'
+printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
+printf '    | sudo sh -s -- -v %s\n' "$version"
+printf '```\n'
+printf '### Latest\n'
+printf '```sh\n'
+printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
+printf '    | sudo sh\n'
+printf '```\n'
+printf 'See the [README](https://github.com/marcuscaisey/playground#installation) for more details.\n'
