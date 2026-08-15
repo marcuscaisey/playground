@@ -32,7 +32,7 @@ printf '```sh\n'
 printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
 printf '    | sudo sh -s -- -v %s\n' "$version"
 printf '```\n'
-printf '### Latest\n'
+printf '### Latest Version\n'
 printf '```sh\n'
 printf 'curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \\\n'
 printf '    | sudo sh\n'
