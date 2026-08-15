@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0]
+
 Initial release
 
 [Unreleased]: https://github.com/marcuscaisey/playground/compare/v1.0.0...HEAD
