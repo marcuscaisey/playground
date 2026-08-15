@@ -14,7 +14,7 @@ jobs:
       - name: Checkout commit
         uses: actions/checkout@v7
       - name: Install mandoc
-        run: apt update && apt install mandoc
+        run: sudo apt-get update && sudo apt-get install mandoc
       - name: Run markdown man page check
         run: scripts/check_markdown_man_page
 
