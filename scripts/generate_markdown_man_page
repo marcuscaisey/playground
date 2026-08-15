@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+#
+# Converts a man page to markdown and prints it to stdout
+# Arguments:
+#    $1: man page
+
+set -eu
+
+man_page=${1:-}
+if [ -z "$man_page" ]; then
+    printf 'error: missing required man page argument\n' >&2
+    exit 2
+fi
+
+mandoc -T markdown -I os=__OS__ "$man_page" | sed '/^__OS__/d'

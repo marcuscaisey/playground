@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+#
+# Checks that the markdown man page is in sync with the source of truth
+
+set -eu
+
+markdown_man_page=docs/pg.1.md
+man_page=docs/pg.1
+
+tmpfile=$(mktemp)
+scripts/generate_markdown_man_page "$man_page" >"$tmpfile"
+
+if diff "$markdown_man_page" "$tmpfile" >/dev/null; then
+    printf 'Markdown man page %s is in sync with the source of truth %s\n' "$markdown_man_page" "$man_page"
+else
+    printf 'Markdown man page %s in not in sync with the source of truth %s\n' >&2 "$markdown_man_page" "$man_page"
+    printf 'Run "scripts/generate_markdown_man_page %s >%s"\n' "$man_page" "$markdown_man_page" >&2
+    exit 1
+fi

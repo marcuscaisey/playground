@@ -1,0 +1,19 @@
+name: CI
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check-markdown-man-page:
+    name: Check Markdown Man Page
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v7
+      - name: Install mandoc
+        run: apt update && apt install mandoc
+      - name: Run markdown man page check
+        run: scripts/check_markdown_man_page

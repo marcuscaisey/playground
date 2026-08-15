@@ -248,4 +248,3 @@ tmux(1)
 
 Marcus Caisey <marcus@teckna.com>
 
-macOS 26.4 - August 11, 2026

@@ -1,5 +1,6 @@
-* CI test checking that markdown manual is in sync
 * Run goreleaser build in CI
 * Set up goreleaser releases in CI
 * Set up built-in templates so that 3rd party deps can be installed easily
+* Add git hook to run CI scripts
+* Make shell scripts print instead of write
 * Distribute through package managers
