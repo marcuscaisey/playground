@@ -18,8 +18,8 @@ jobs:
       - name: Run markdown man page check
         run: scripts/check_markdown_man_page
 
-  goreleaser-build:
-    name: GoReleaser Build
+  test-goreleaser-release:
+    name: Test GoReleaser Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout commit
@@ -28,8 +28,8 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Run GoReleaser build
+      - name: Run GoReleaser release
         uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: build --snapshot --clean
+          args: release --snapshot --clean
