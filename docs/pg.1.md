@@ -57,7 +57,11 @@ The session ends when the editor is closed.
 Sessions are created in the
 *sessions directory*
 ,
-which defaults to $XDG\_DATA\_HOME/pg/sessions, or $HOME/.local/share/pg/sessions if $XDG\_DATA\_HOME is not set.
+which defaults to
+*$XDG\_DATA\_HOME/pg/sessions*
+(or
+*$HOME/.local/share/pg/sessions*
+if $XDG\_DATA\_HOME is not set).
 See the
 *OPTIONS*
 section for all of the options that
@@ -71,7 +75,10 @@ When a session is created, the contents of the template are copied into the sess
 **pg**
 provides a number of built-in templates but you can use your own by adding them to the
 *user templates directory*
-$XDG\_CONFIG\_HOME/pg/templates, or $HOME/.config/pg/templates if $XDG\_CONFIG\_HOME is not set.
+*$XDG\_CONFIG\_HOME/pg/templates*
+(or
+*$HOME/.config/pg/templates*
+if $XDG\_CONFIG\_HOME is not set).
 User templates override built-in templates with the same name.
 The structure of a template is described in the
 *TEMPLATE STRUCTURE*
@@ -132,7 +139,9 @@ accepts the following options:
 **-sessions-dir** *directory*
 
 	Directory where sessions are created.
-	Defaults to $PG_SESSIONS_DIR if set, otherwise $XDG_DATA_HOME/pg/sessions.
+	Defaults to $PG_SESSIONS_DIR if set, otherwise
+	*$XDG_DATA_HOME/pg/sessions*
+	.
 
 **-version**
 
@@ -160,15 +169,21 @@ To move the output pane to the side and have it take up half the screen:
 
 > $ pg -vertical -output-pane-size 50% python
 
-To configure bash tab completion, add the following to ~/.bashrc:
+To configure bash tab completion, add the following to
+*~/.bashrc*
+:
 
 > source <(pg -completion-script bash)
 
-To configure zsh tab completion, add the following to ~/.zshrc:
+To configure zsh tab completion, add the following to
+*~/.zshrc*
+:
 
 > source <(pg -completion-script zsh)
 
-To configure fish tab completion, add the following to ~/.config/fish/config.fish:
+To configure fish tab completion, add the following to
+*~/.config/fish/config.fish*
+:
 
 > pg -completion-script fish | source
 
