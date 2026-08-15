@@ -131,7 +131,9 @@ Defaults to 35%.
 Directory where sessions are created.
 Defaults to $PG_SESSIONS_DIR if set, otherwise
 .Pa $XDG_DATA_HOME/pg/sessions
-.Ns .
+(or
+.Pa $HOME/.local/share/pg/sessions
+if $XDG_DATA_HOME is not set).
 .Ed
 .It Fl version
 .Bd -ragged -offset indent -compact
