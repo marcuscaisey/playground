@@ -120,6 +120,14 @@ accepts the following options:
 **-completion-script** *shell*
 
 	Generate a shell completion script for bash, zsh, or fish.
+	If you installed
+	**pg**
+	with the installation script
+	,
+	then this should not be required.
+	See
+	*SHELL COMPLETION*
+	for more information.
 
 **-editor** *command*
 
@@ -171,19 +179,62 @@ To move the output pane to the side and have it take up half the screen:
 
 > $ pg -vertical -output-pane-size 50% python
 
-To configure bash tab completion, add the following to
+# SHELL COMPLETION
+
+If you installed
+**pg**
+with the installation script
+([https://github.com/marcuscaisey/playground#installation-script](https://github.com/marcuscaisey/playground#installation-script))
+,
+then shell completion in bash, zsh, and fish should work out of the box.
+If you used a non-default install directory (the
+**-d**
+flag) or have a non-default $XDG_DATA_DIRS, then they may not.
+
+If completion is not working in your shell:
+
+bash
+
+	Ensure that
+	[https://github.com/scop/bash-completion](https://github.com/scop/bash-completion)
+	is installed.
+	If this doesn't work, then ensure that
+	*$INSTALL_DIR/share/bash-completion/completions*
+	is in $BASH_COMPLETION_USER_DIR.
+
+zsh
+
+	Ensure that
+	*$INSTALL_DIR/share/zsh/site-functions*
+	is in $fpath.
+
+fish
+
+	Ensure that
+	*$INSTALL_DIR/share/fish/vendor_completions.d*
+	is in $fish_complete_path.
+
+$INSTALL_DIR defaults to
+*/usr/local*
+.
+
+If you didn't install
+**pg**
+with the installation script, then the simplest way to enable completion is by sourcing the completion script in your shell's startup file.
+
+To enable bash shell completion, add the following to
 *~/.bashrc*
 :
 
 > source <(pg -completion-script bash)
 
-To configure zsh tab completion, add the following to
+To enable zsh shell completion, add the following to
 *~/.zshrc*
 :
 
 > source <(pg -completion-script zsh)
 
-To configure fish tab completion, add the following to
+To enable fish shell completion, add the following to
 *~/.config/fish/config.fish*
 :
 

@@ -1,4 +1,3 @@
-* Mention installation wrt completion script examples / instructions
 * CI test checking that markdown manual is in sync
 * Run goreleaser build in CI
 * Set up goreleaser releases in CI

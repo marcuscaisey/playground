@@ -111,6 +111,14 @@ accepts the following options:
 .It Fl completion-script Ar shell
 .Bd -ragged -offset indent -compact
 Generate a shell completion script for bash, zsh, or fish.
+If you installed
+.Nm
+with the installation script
+.Ns ,
+then this should not be required.
+See
+.Sx SHELL COMPLETION
+for more information.
 .It Fl editor Ar command
 .Bd -ragged -offset indent -compact
 Command to open the editor.
@@ -160,20 +168,57 @@ To start or resume a Python session named banana:
 To move the output pane to the side and have it take up half the screen:
 .Pp
 .Dl $ pg -vertical -output-pane-size 50% python
+.Sh SHELL COMPLETION
+If you installed
+.Nm
+with the installation script
+.Pq Lk https://github.com/marcuscaisey/playground#installation-script
+.Ns ,
+then shell completion in bash, zsh, and fish should work out of the box.
+If you used a non-default install directory (the
+.Fl d
+flag) or have a non-default $XDG_DATA_DIRS, then they may not.
 .Pp
-To configure bash tab completion, add the following to
+If completion is not working in your shell:
+.Bl -tag -width "bash"
+.It bash
+Ensure that
+.Lk https://github.com/scop/bash-completion
+is installed.
+If this doesn't work, then ensure that
+.Pa $INSTALL_DIR/share/bash-completion/completions
+is in $BASH_COMPLETION_USER_DIR.
+.It zsh
+Ensure that
+.Pa $INSTALL_DIR/share/zsh/site-functions
+is in $fpath.
+.It fish
+Ensure that
+.Pa $INSTALL_DIR/share/fish/vendor_completions.d
+is in $fish_complete_path.
+.El
+.Pp
+$INSTALL_DIR defaults to
+.Pa /usr/local
+.Ns .
+.Pp
+If you didn't install
+.Nm
+with the installation script, then the simplest way to enable completion is by sourcing the completion script in your shell's startup file.
+.Pp
+To enable bash shell completion, add the following to
 .Pa ~/.bashrc
 .Ns :
 .Pp
 .Dl source <(pg -completion-script bash)
 .Pp
-To configure zsh tab completion, add the following to
+To enable zsh shell completion, add the following to
 .Pa ~/.zshrc
 .Ns :
 .Pp
 .Dl source <(pg -completion-script zsh)
 .Pp
-To configure fish tab completion, add the following to
+To enable fish shell completion, add the following to
 .Pa ~/.config/fish/config.fish
 .Ns :
 .Pp
