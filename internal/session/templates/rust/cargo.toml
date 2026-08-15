@@ -1,0 +1,9 @@
+[package]
+name = "playground"
+edition = "2024"
+
+[[bin]]
+name = "playground"
+path = "main.rs"
+
+[dependencies]
