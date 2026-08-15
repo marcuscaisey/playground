@@ -17,3 +17,19 @@ jobs:
         run: apt update && apt install mandoc
       - name: Run markdown man page check
         run: scripts/check_markdown_man_page
+
+  goreleaser-build:
+    name: GoReleaser Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Run GoReleaser build
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: build --snapshot --clean
