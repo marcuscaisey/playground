@@ -19,6 +19,7 @@ printf '## Changelog\n'
 
 awk '
     /^## / {
+        if (/Unreleased/) next
         if (found) exit
         found = 1
         next
