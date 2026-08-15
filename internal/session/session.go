@@ -201,7 +201,7 @@ func (s *Session) Run(
 		return fmt.Errorf("running session: %s", err)
 	}
 
-	// Write is best effort as the last opened time is only depended upon during tab completion
+	// Write is best effort as the last opened time is only depended upon during shell completion
 	_ = os.WriteFile(filepath.Join(s.Dir, sessionLastOpenedMarker), nil, 0o666)
 
 	// Ensure that commands which rely on the current directory (like tmux split-window -c

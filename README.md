@@ -23,7 +23,7 @@ not work as expected, or if there is a feature you would like to see added.
 - Named playground sessions are persistent and can be resumed later
 - Anonymous playground sessions are temporary but can be saved on exit
 - Sessions are created in a configurable location
-- Shell completions for bash, zsh, and fish
+- Shell completion for bash, zsh, and fish
 
 ## Requirements
 
