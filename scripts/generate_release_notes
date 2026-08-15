@@ -6,6 +6,8 @@
 # Arguments:
 #     $1: version
 
+set -eu
+
 version=$1
 if [ -z "$version" ]; then
     printf 'error: missing required version argument\n' >&2
