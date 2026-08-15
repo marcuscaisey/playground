@@ -34,7 +34,7 @@ supported.
 
 ### Installation Script
 
-The simplest way to install `pg` is run the installation script
+The simplest way to install `pg` is run the installation script:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \
@@ -43,14 +43,15 @@ curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/script
 
 This installs the latest version of `pg`, the `pg` man page, and the `pg` shell completion scripts.
 
-To install a different version, run
+To install a different version, pass the `-v` flag:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \
     | sudo sh -s -- -v 1.2.3
 ```
 
-By default, everything is installed under `/usr/local`. To install under a different directory, run
+By default, everything is installed under `/usr/local`. To install under a different directory, pass
+the `-d` flag:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/install.sh \
@@ -65,19 +66,19 @@ See https://github.com/marcuscaisey/playground/releases for the release tarballs
 
 ### From Source
 
-To install the latest version, run
+To install the latest version, run:
 
 ```sh
 go install github.com/marcuscaisey/playground/cmd/pg@latest
 ```
 
-To install the a specific version, run
+To install a specific version, run:
 
 ```sh
 go install github.com/marcuscaisey/playground/cmd/pg@v1.2.3
 ```
 
-To install from the head of the main branch, run
+To install from the head of the main branch, run:
 
 ```sh
 go install github.com/marcuscaisey/playground/cmd/pg@main
@@ -86,14 +87,14 @@ go install github.com/marcuscaisey/playground/cmd/pg@main
 ## Uninstallation
 
 If you installed `pg` using the [installation script](#installation-script), you can uninstall it by
-running
+running:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/uninstall.sh \
     | sudo sh
 ```
 
-If you installed `pg` to a non-default directory, instead run
+If you installed `pg` to a non-default directory, pass the `-d` flag:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/scripts/uninstall.sh \
@@ -102,13 +103,13 @@ curl -fsSL https://raw.githubusercontent.com/marcuscaisey/playground/HEAD/script
 
 ## Documentation
 
-For detailed documentation, open the man page by running
+For detailed documentation, open the man page by running:
 
 ```sh
 man pg
 ```
 
-To view the man page from the source repository, run
+To view the man page from the source repository, run:
 
 ```sh
 man docs/pg.1
