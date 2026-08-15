@@ -8,7 +8,7 @@
 
 set -eu
 
-version=$1
+version=${1:-}
 if [ -z "$version" ]; then
     printf 'error: missing required version argument\n' >&2
     exit 2
