@@ -121,9 +121,9 @@ To view the man page online, see the [markdown man page](./docs/pg.1.md).
 
 ## Motivation
 
-As I'm writing code, I find myself creating small programs under ~/scratch. Either to explore some
-aspect of a module/package/API/whatever or, at work, as a teaching tool to help explain a concept to
-a teammate.
+I do pretty much everything in the terminal, usually in a tmux session. As I'm writing code, I find
+myself creating small programs under ~/scratch. Either to explore some aspect of a
+module/package/API/whatever or, at work, as a teaching tool to help explain a concept to a teammate.
 
 At a past job, we used the [please](https://please.build) build system which meant that to play
 around with internal code, I needed to create a program in a special "experimental" directory in the
