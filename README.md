@@ -11,6 +11,8 @@ a separate [tmux](https://github.com/tmux/tmux/wiki) pane, under or to the side 
 Bug reports and feature requests are welcome. Please open an issue if you find something that does
 not work as expected, or if there is a feature you would like to see added.
 
+For why I've built this, see the [motivation](#motivation) section.
+
 ## Features
 
 - Use whichever editor you like
