@@ -1,10 +1,9 @@
 # playground (pg)
 
-Playground (`pg`) runs a coding playground in your terminal.
-
-A coding playground is an environment for quickly writing and executing a program in any language.
-The program is opened in your editor and automatically executed on save. The output is displayed in
-a separate [tmux](https://github.com/tmux/tmux/wiki) pane, under or to the side of the editor.
+Playground (`pg`) runs a coding playground in your terminal -- an environment for quickly writing
+and executing a program in any language. The program is opened in your editor and automatically
+executed on save. The output is displayed in a separate [tmux](https://github.com/tmux/tmux/wiki)
+pane, under or to the side of the editor.
 
 [Demo](https://github.com/user-attachments/assets/f670bba6-ba65-40fa-af0c-5e19766eceeb)
 
