@@ -6,7 +6,7 @@ A coding playground is an environment for quickly writing and executing a progra
 The program is opened in your editor and automatically executed on save. The output is displayed in
 a separate [tmux](https://github.com/tmux/tmux/wiki) pane, under or to the side of the editor.
 
-https://github.com/user-attachments/assets/f670bba6-ba65-40fa-af0c-5e19766eceeb
+[Demo](https://github.com/user-attachments/assets/f670bba6-ba65-40fa-af0c-5e19766eceeb)
 
 Bug reports and feature requests are welcome. Please open an issue if you find something that does
 not work as expected, or if there is a feature you would like to see added.
